@@ -43,10 +43,63 @@ To run the tests, check your test coverage, and generate an HTML coverage report
 
     $ pytest
 
-### Live reloading and Sass CSS compilation
+### Mock Data
 
-Moved to [Live reloading and SASS compilation](https://cookiecutter-django.readthedocs.io/en/latest/2-local-development/developing-locally.html#using-webpack-or-gulp).
+# Basic usage - uses default values
+
+python manage.py generate_mock_data
+
+# Customize the amount of data
+
+python manage.py generate_mock_data \
+    --leads 50 \
+    --contacts-per-lead 3 \
+    --activities 100 \
+    --tasks 50
+
+# Clear existing data before generating
+
+python manage.py generate_mock_data --clear
+
+# Full customization
+
+python manage.py generate_mock_data \
+    --categories 10 \
+    --tags 20 \
+    --users 10 \
+    --leads 50 \
+    --contacts-per-lead 3 \
+    --activities 100 \
+    --tasks 50 \
+    --conversations 40 \
+    --messages-per-conversation 10 \
+    --email-templates 8 \
+    --saved-filters 15 \
+    --api-credentials 3 \
+    --clear
 
 ## Deployment
 
-The following details how to deploy this application.
+# Local:
+- Create and activate a virtual environment (using `venv` or `virtualenv`):
+
+    # Using venv (Python 3.3+ recommended)
+    python3 -m venv venv
+    source venv/bin/activate
+
+    # Or using virtualenv
+    pip install virtualenv
+    virtualenv venv
+    source venv/bin/activate
+
+- Install dependencies:
+    pip install -r requirements/local.txt
+
+- Set up your environment variables (see `.env.example` for reference)
+- Apply database migrations:
+    python manage.py migrate
+- Run the development server:
+    python manage.py runserver
+    
+# Production:
+- Railway, more details soon
