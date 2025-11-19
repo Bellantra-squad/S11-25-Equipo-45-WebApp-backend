@@ -33,5 +33,5 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WORKERS} --threads ${THREADS} --timeout ${GUNICORN_TIMEOUT} --log-file -"]
+CMD ["sh", "-c", "gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --workers ${WORKERS:-4} --threads ${THREADS:-2} --timeout ${GUNICORN_TIMEOUT:-60} --log-file -"]
 
