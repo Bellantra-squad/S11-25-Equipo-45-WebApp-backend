@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from crm.core.utils.pagination import DefaultPageNumberPagination
 from crm.leads.api.serializers import (
     ActivitySerializer,
     ApiCredentialSerializer,
@@ -49,7 +50,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
     ordering = ["name"]
-
+    pagination_class = DefaultPageNumberPagination
 
 class LeadStatusViewSet(viewsets.ModelViewSet):
     """ViewSet for LeadStatus model."""
@@ -62,6 +63,7 @@ class LeadStatusViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "description"]
     ordering_fields = ["order_position", "name", "created_at"]
     ordering = ["order_position", "name"]
+    pagination_class = DefaultPageNumberPagination
 
 
 class TagViewSet(viewsets.ModelViewSet):
@@ -74,7 +76,7 @@ class TagViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at"]
     ordering = ["name"]
-
+    pagination_class = DefaultPageNumberPagination
 
 class LeadViewSet(viewsets.ModelViewSet):
     """ViewSet for Lead model."""
@@ -88,6 +90,7 @@ class LeadViewSet(viewsets.ModelViewSet):
     search_fields = ["company_name", "industry", "website", "notes"]
     ordering_fields = ["created_at", "updated_at", "lead_score", "estimated_value", "company_name"]
     ordering = ["-created_at"]
+    pagination_class = DefaultPageNumberPagination
 
     def get_serializer_class(self):
         """Return appropriate serializer class."""
@@ -167,6 +170,7 @@ class ContactViewSet(viewsets.ModelViewSet):
     search_fields = ["first_name", "last_name", "email", "phone", "whatsapp_number", "position"]
     ordering_fields = ["first_name", "last_name", "created_at"]
     ordering = ["-is_primary", "first_name"]
+    pagination_class = DefaultPageNumberPagination
 
     @action(detail=True, methods=["post", "delete"])
     def tags(self, request, pk=None):
@@ -202,6 +206,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
     search_fields = ["description"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
+    pagination_class = DefaultPageNumberPagination
 
     def perform_create(self, serializer):
         """Set user to current user if not provided."""
@@ -222,6 +227,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     search_fields = ["title", "description"]
     ordering_fields = ["due_date", "priority", "created_at", "status"]
     ordering = ["-due_date", "-created_at"]
+    pagination_class = DefaultPageNumberPagination
 
     def get_queryset(self):
         """Filter tasks by current user if needed."""
@@ -254,6 +260,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
     search_fields = ["subject"]
     ordering_fields = ["created_at", "updated_at"]
     ordering = ["-updated_at", "-created_at"]
+    pagination_class = DefaultPageNumberPagination
 
     @action(detail=True, methods=["get", "post"])
     def messages(self, request, pk=None):
@@ -282,6 +289,7 @@ class MessageViewSet(viewsets.ModelViewSet):
     search_fields = ["content"]
     ordering_fields = ["sent_at"]
     ordering = ["sent_at"]
+    pagination_class = DefaultPageNumberPagination
 
     @action(detail=True, methods=["post"])
     def mark_read(self, request, pk=None):
@@ -305,6 +313,7 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "subject", "body"]
     ordering_fields = ["name", "created_at"]
     ordering = ["name"]
+    pagination_class = DefaultPageNumberPagination
 
     def perform_create(self, serializer):
         """Set created_by to current user if not provided."""
@@ -333,6 +342,7 @@ class SavedFilterViewSet(viewsets.ModelViewSet):
     search_fields = ["name"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
+    pagination_class = DefaultPageNumberPagination
 
     def get_queryset(self):
         """Return filters for current user or public filters."""
@@ -356,4 +366,5 @@ class ApiCredentialViewSet(viewsets.ModelViewSet):
     search_fields = ["service_name"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
+    pagination_class = DefaultPageNumberPagination
 
