@@ -27,11 +27,12 @@ RUN pip install --upgrade pip \
 COPY . /app
 
 RUN useradd --create-home appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && chmod +x /app/entrypoint.sh
 
 USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --workers ${WORKERS:-4} --threads ${THREADS:-2} --timeout ${GUNICORN_TIMEOUT:-60} --log-file -"]
+CMD ["/app/entrypoint.sh"]
 

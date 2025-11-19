@@ -11,10 +11,7 @@
     "restartPolicyMaxRetries": 3,
     "healthcheckPath": "/api/schema/",
     "healthcheckTimeout": 120,
-    "startCommand": "bash -c \"python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WORKERS:-4} --threads ${THREADS:-2} --timeout ${GUNICORN_TIMEOUT:-60} --log-file -\""
-  },
-  "env": {
-    "DJANGO_SETTINGS_MODULE": "config.settings.production"
+    "startCommand": "/app/entrypoint.sh"
   }
 }
 
