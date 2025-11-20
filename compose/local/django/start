@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -o errexit
+set -o pipefail
+set -o nounset
+
+# Run shared migrations (public schema)
+python manage.py migrate_schemas --shared --noinput
+
+# Run tenant migrations
+python manage.py migrate_schemas --noinput
+
+exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
