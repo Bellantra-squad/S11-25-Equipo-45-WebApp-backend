@@ -1,0 +1,94 @@
+[
+    {
+        "model": "leads.leadstatus",
+        "pk": 1,
+        "fields": {
+            "name": "Nuevo",
+            "description": "Lead recién creado, aún no contactado",
+            "color": "#3498db",
+            "order_position": 1,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "leads.leadstatus",
+        "pk": 2,
+        "fields": {
+            "name": "Contactado",
+            "description": "Lead que ha sido contactado inicialmente",
+            "color": "#f39c12",
+            "order_position": 2,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "leads.leadstatus",
+        "pk": 3,
+        "fields": {
+            "name": "En seguimiento",
+            "description": "Lead en proceso de seguimiento activo",
+            "color": "#e67e22",
+            "order_position": 3,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "leads.leadstatus",
+        "pk": 4,
+        "fields": {
+            "name": "Calificado",
+            "description": "Lead calificado y validado como potencial cliente",
+            "color": "#3498db",
+            "order_position": 4,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "leads.leadstatus",
+        "pk": 5,
+        "fields": {
+            "name": "Negociación",
+            "description": "Lead en etapa de negociación comercial",
+            "color": "#9b59b6",
+            "order_position": 5,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "leads.leadstatus",
+        "pk": 6,
+        "fields": {
+            "name": "Ganado (Cliente)",
+            "description": "Lead convertido exitosamente en cliente",
+            "color": "#27ae60",
+            "order_position": 6,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "leads.leadstatus",
+        "pk": 7,
+        "fields": {
+            "name": "Perdido",
+            "description": "Lead que no se pudo convertir en cliente",
+            "color": "#e74c3c",
+            "order_position": 7,
+            "is_active": true,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        }
+    }
+]
+

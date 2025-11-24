@@ -17,11 +17,11 @@ class User(AbstractUser):
     check forms.SignupForm and forms.SocialSignupForms accordingly.
     """
 
-    # First and last name do not cover name patterns around the globe
-    name = CharField(_("Name of User"), blank=True, max_length=255)
-    first_name = None  # type: ignore[assignment]
-    last_name = None  # type: ignore[assignment]
     email = EmailField(_("email address"), unique=True)
+    password_hash = CharField(_("password hash"), max_length=255, editable=False)
+    first_name = CharField(_("first name"), max_length=150, blank=True)
+    last_name = CharField(_("last name"), max_length=150, blank=True)
+    role = CharField(_("role"), max_length=50, blank=True)
     username = None  # type: ignore[assignment]
 
     USERNAME_FIELD = "email"
@@ -37,3 +37,15 @@ class User(AbstractUser):
 
         """
         return reverse("users:detail", kwargs={"pk": self.id})
+
+    def save(self, *args, **kwargs):
+        """Override save to store password hash."""
+        if hasattr(self, 'password') and self.password:
+            # Get the hashed password from the parent class
+            super().save(*args, **kwargs)
+            self.password_hash = self.password
+            if self.pk:
+                # Update only password_hash to avoid re-hashing
+                User.objects.filter(pk=self.pk).update(password_hash=self.password)
+        else:
+            super().save(*args, **kwargs)

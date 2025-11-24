@@ -50,7 +50,7 @@ LOCALE_PATHS = [str(BASE_DIR / "locale")]
 DATABASES = {
     "default": env.db(
         "DATABASE_URL",
-        default="postgres:///crm",
+        default="postgres://postgres:2323@localhost:5432/crm",
     ),
 }
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
@@ -88,10 +88,12 @@ THIRD_PARTY_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
+    "django_filters",
 ]
 
 LOCAL_APPS = [
     "crm.users",
+    "crm.leads",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -311,10 +313,45 @@ CORS_URLS_REGEX = r"^/api/.*$"
 # See more configuration options at https://drf-spectacular.readthedocs.io/en/latest/settings.html#settings
 SPECTACULAR_SETTINGS = {
     "TITLE": "CRM API",
-    "DESCRIPTION": "Documentation of API endpoints of CRM",
+    "DESCRIPTION": (
+        "API REST completa para el sistema CRM con integración WhatsApp y "
+        "Email. Permite gestionar leads, contactos, conversaciones, tareas y "
+        "métricas."
+    ),
     "VERSION": "1.0.0",
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],  # Changed from IsAdminUser
+    "SERVE_AUTHENTICATION": None,
     "SCHEMA_PATH_PREFIX": "/api/",
+    "SCHEMA_PATH": "/api/schema/",
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "displayOperationId": True,
+        "filter": True,
+        "tryItOutEnabled": True,
+    },
+    "REDOC_UI_SETTINGS": {
+        "hideDownloadButton": False,
+        "expandResponses": "200,201",
+        "pathInMiddlePanel": True,
+    },
+    "COMPONENT_SPLIT_REQUEST": True,
+    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
+    "TAGS": [
+        {"name": "leads", "description": "Gestión de leads"},
+        {"name": "contacts", "description": "Gestión de contactos"},
+        {"name": "conversations", "description": "Gestión de conversaciones"},
+        {"name": "messages", "description": "Gestión de mensajes"},
+        {"name": "tasks", "description": "Gestión de tareas"},
+        {"name": "activities", "description": "Registro de actividades"},
+        {"name": "categories", "description": "Categorías de leads"},
+        {"name": "tags", "description": "Etiquetas para leads y contactos"},
+        {"name": "templates", "description": "Plantillas de email"},
+        {"name": "filters", "description": "Filtros guardados"},
+        {"name": "metrics", "description": "Métricas y dashboard"},
+        {"name": "exports", "description": "Exportación de datos"},
+        {"name": "webhooks", "description": "Webhooks para integraciones"},
+        {"name": "users", "description": "Gestión de usuarios"},
+    ],
 }
 # Your stuff...
 # ------------------------------------------------------------------------------
