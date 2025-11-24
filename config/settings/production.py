@@ -153,6 +153,22 @@ LOGGING = {
     },
 }
 
+# CORS
+# ------------------------------------------------------------------------------
+# https://github.com/adamchainz/django-cors-headers#cors_allow_all_origins-bool
+# Permitir todos los orígenes (menos seguro, pero útil para desarrollo/prototipos)
+CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)
+# Si prefieres especificar orígenes específicos, desactiva lo anterior y usa esto:
+# CORS_ALLOWED_ORIGINS = env.list(
+#     "CORS_ALLOWED_ORIGINS",
+#     default=[],
+# )
+# CORS_ALLOWED_ORIGIN_REGEXES = env.list(
+#     "CORS_ALLOWED_ORIGIN_REGEXES",
+#     default=[],
+# )
+CORS_ALLOW_CREDENTIALS = True
+
 # django-rest-framework
 # -------------------------------------------------------------------------------
 # Tools that generate code samples can use SERVERS to point to the correct domain
