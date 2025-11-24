@@ -64,5 +64,24 @@ INTERNAL_IPS = ["127.0.0.1", "10.0.2.2"]
 # https://django-extensions.readthedocs.io/en/latest/installation_instructions.html#configuration
 INSTALLED_APPS += ["django_extensions"]
 
+# CORS
+# ------------------------------------------------------------------------------
+# https://github.com/adamchainz/django-cors-headers#cors_allowed_origins-sequencestr
+# Permitir todos los orígenes de localhost para desarrollo local
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+]
+# Permitir cualquier origen que comience con localhost o 127.0.0.1 para mayor flexibilidad
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+CORS_ALLOW_CREDENTIALS = True
+
 # Your stuff...
 # ------------------------------------------------------------------------------
