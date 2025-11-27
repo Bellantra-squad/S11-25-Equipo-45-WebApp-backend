@@ -38,6 +38,7 @@ from crm.leads.models import (
     Tag,
     Task,
 )
+from crm.leads.services.email_service import EmailService
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -367,4 +368,69 @@ class ApiCredentialViewSet(viewsets.ModelViewSet):
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
     pagination_class = DefaultPageNumberPagination
+
+    @action(detail=False, methods=["post"], url_path="test-brevo")
+    def test_brevo(self, request):
+        """
+        Test Brevo email sending.
+
+        Sends a test email via Brevo API to verify configuration.
+        """
+        email = request.data.get("email")
+        if not email:
+            return Response(
+                {"error": "Email address is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Try to get active Brevo credential or use settings
+        credential = ApiCredential.objects.filter(
+            credential_type="email_brevo", is_active=True
+        ).first()
+
+        # Initialize email service with Brevo
+        email_service = EmailService(api_credential=credential, use_brevo=True)
+
+        # Prepare test email content
+        html_body = """
+        <html>
+            <body>
+                <h1>Email de Prueba - Brevo</h1>
+                <p>Este es un email de prueba enviado desde el sistema CRM.</p>
+                <p>Si recibes este correo, la configuración de Brevo está funcionando correctamente.</p>
+                <hr>
+                <p><small>Enviado desde: CRM System</small></p>
+            </body>
+        </html>
+        """
+        plain_body = (
+            "Este es un email de prueba enviado desde el sistema CRM. "
+            "Si recibes este correo, la configuración de Brevo está funcionando correctamente."
+        )
+
+        # Send test email
+        result = email_service.send_email(
+            to=[email],
+            subject="[TEST] Email de Prueba - Brevo CRM",
+            body=plain_body,
+            html_body=html_body,
+        )
+
+        if result.get("success"):
+            return Response(
+                {
+                    "message": "Email de prueba enviado exitosamente",
+                    "email": email,
+                    "message_id": result.get("message_id"),
+                },
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {
+                    "error": "Error al enviar email de prueba",
+                    "details": result.get("error"),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 

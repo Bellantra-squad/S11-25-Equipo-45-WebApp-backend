@@ -30,8 +30,32 @@ CACHES = {
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
 EMAIL_BACKEND = env(
-    "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend",
+    "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend",
 )
+
+# Brevo SMTP Configuration
+# https://docs.djangoproject.com/en/dev/ref/settings/#email-host
+EMAIL_HOST = env("DJANGO_EMAIL_HOST", default="smtp-relay.brevo.com")
+# https://docs.djangoproject.com/en/dev/ref/settings/#email-port
+EMAIL_PORT = env.int("DJANGO_EMAIL_PORT", default=587)
+# https://docs.djangoproject.com/en/dev/ref/settings/#email-use-tls
+EMAIL_USE_TLS = env.bool("DJANGO_EMAIL_USE_TLS", default=True)
+# https://docs.djangoproject.com/en/dev/ref/settings/#email-host-user
+EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", default="9bfa78001@smtp-brevo.com")
+# https://docs.djangoproject.com/en/dev/ref/settings/#email-host-password
+EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD", default="")
+
+# https://docs.djangoproject.com/en/dev/ref/settings/#default-from-email
+DEFAULT_FROM_EMAIL = env(
+    "DJANGO_DEFAULT_FROM_EMAIL",
+    default="CRM <noreply@example.com>",
+)
+# https://docs.djangoproject.com/en/dev/ref/settings/#server-email
+SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
+
+# Brevo API Configuration (for EmailService)
+# API Key from Brevo dashboard: https://app.brevo.com/settings/keys/api
+BREVO_API_KEY = env("BREVO_API_KEY", default="")
 
 # WhiteNoise
 # ------------------------------------------------------------------------------
