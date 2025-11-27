@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -19,6 +20,34 @@ class MetricsViewSet(ViewSet):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Obtener métricas del dashboard principal",
+        description=(
+            "Retorna un resumen completo de métricas para el dashboard principal. "
+            "Incluye contactos activos, mensajes enviados/recibidos, tasa de respuesta, "
+            "leads por estado, tasa de conversión, actividades recientes y tareas pendientes. "
+            "Los datos se calculan para los últimos 30 días por defecto."
+        ),
+        tags=["metrics"],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "active_contacts": {"type": "integer"},
+                    "messages_sent": {"type": "integer"},
+                    "messages_received": {"type": "integer"},
+                    "response_rate": {"type": "number"},
+                    "leads_by_status": {"type": "array"},
+                    "conversion_rate": {"type": "number"},
+                    "total_leads": {"type": "integer"},
+                    "converted_leads": {"type": "integer"},
+                    "recent_activities": {"type": "integer"},
+                    "pending_tasks": {"type": "integer"},
+                    "period_days": {"type": "integer"},
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def dashboard(self, request) -> Response:
         """Get main dashboard metrics."""
@@ -81,6 +110,33 @@ class MetricsViewSet(ViewSet):
 
         return Response(data)
 
+    @extend_schema(
+        summary="Obtener conteo de contactos activos",
+        description=(
+            "Retorna el número de contactos activos en un período específico. "
+            "Un contacto se considera activo si tiene actividades o conversaciones "
+            "actualizadas en el período especificado."
+        ),
+        tags=["metrics"],
+        parameters=[
+            OpenApiParameter(
+                name="days",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Número de días hacia atrás para calcular contactos activos (default: 30)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer", "description": "Número de contactos activos"},
+                    "period_days": {"type": "integer", "description": "Período en días"},
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def contacts_active(self, request) -> Response:
         """Get active contacts count."""
@@ -94,6 +150,43 @@ class MetricsViewSet(ViewSet):
 
         return Response({"count": active_contacts, "period_days": days})
 
+    @extend_schema(
+        summary="Obtener conteo de mensajes enviados",
+        description=(
+            "Retorna el número de mensajes enviados por usuarios en un período específico. "
+            "Incluye un desglose diario de mensajes enviados para análisis de tendencias."
+        ),
+        tags=["metrics"],
+        parameters=[
+            OpenApiParameter(
+                name="days",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Número de días hacia atrás para calcular mensajes enviados (default: 30)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer", "description": "Total de mensajes enviados"},
+                    "period_days": {"type": "integer", "description": "Período en días"},
+                    "by_day": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "day": {"type": "string", "format": "date"},
+                                "count": {"type": "integer"},
+                            },
+                        },
+                        "description": "Mensajes agrupados por día",
+                    },
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def messages_sent(self, request) -> Response:
         """Get messages sent count with date range."""
@@ -121,6 +214,41 @@ class MetricsViewSet(ViewSet):
             }
         )
 
+    @extend_schema(
+        summary="Calcular tasa de respuesta",
+        description=(
+            "Calcula la tasa de respuesta de mensajes en un período específico. "
+            "La tasa de respuesta se calcula como: (mensajes recibidos / mensajes enviados) * 100. "
+            "Indica qué porcentaje de mensajes enviados recibieron respuesta."
+        ),
+        tags=["metrics"],
+        parameters=[
+            OpenApiParameter(
+                name="days",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Número de días hacia atrás para calcular la tasa (default: 30)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "response_rate": {
+                        "type": "number",
+                        "description": "Tasa de respuesta en porcentaje",
+                    },
+                    "messages_sent": {"type": "integer", "description": "Total de mensajes enviados"},
+                    "messages_received": {
+                        "type": "integer",
+                        "description": "Total de mensajes recibidos",
+                    },
+                    "period_days": {"type": "integer", "description": "Período en días"},
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def response_rate(self, request) -> Response:
         """Calculate response rate."""
@@ -148,6 +276,36 @@ class MetricsViewSet(ViewSet):
             }
         )
 
+    @extend_schema(
+        summary="Obtener leads agrupados por estado",
+        description=(
+            "Retorna un resumen de leads agrupados por estado. "
+            "Incluye el conteo y porcentaje de leads en cada estado, "
+            "junto con información del estado (nombre, color, ID)."
+        ),
+        tags=["metrics"],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "leads_by_status": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "status_name": {"type": "string"},
+                                "status_id": {"type": "integer"},
+                                "color": {"type": "string"},
+                                "count": {"type": "integer"},
+                                "percentage": {"type": "number"},
+                            },
+                        },
+                    },
+                    "total": {"type": "integer", "description": "Total de leads"},
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def leads_by_status(self, request) -> Response:
         """Get leads grouped by status."""
@@ -174,6 +332,42 @@ class MetricsViewSet(ViewSet):
 
         return Response({"leads_by_status": result, "total": total})
 
+    @extend_schema(
+        summary="Calcular tasa de conversión de leads",
+        description=(
+            "Calcula la tasa de conversión de leads a clientes. "
+            "Incluye la tasa general y un desglose mensual de conversiones "
+            "para análisis de tendencias a lo largo del tiempo."
+        ),
+        tags=["metrics"],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "conversion_rate": {
+                        "type": "number",
+                        "description": "Tasa de conversión en porcentaje",
+                    },
+                    "total_leads": {"type": "integer", "description": "Total de leads"},
+                    "converted_leads": {
+                        "type": "integer",
+                        "description": "Total de leads convertidos a clientes",
+                    },
+                    "conversions_by_month": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "month": {"type": "string"},
+                                "count": {"type": "integer"},
+                            },
+                        },
+                        "description": "Conversiones agrupadas por mes",
+                    },
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def conversion_rate(self, request) -> Response:
         """Calculate lead to client conversion rate."""
