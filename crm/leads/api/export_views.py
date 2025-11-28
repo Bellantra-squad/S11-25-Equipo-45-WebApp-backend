@@ -4,6 +4,7 @@ import csv
 from io import BytesIO
 
 from django.http import HttpResponse
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
@@ -21,6 +22,51 @@ class ExportViewSet(viewsets.ViewSet):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Exportar leads a CSV",
+        description=(
+            "Exporta los leads a un archivo CSV. Permite filtrar por categoría, "
+            "estado y si son clientes. El archivo incluye información completa de cada lead "
+            "como nombre de empresa, industria, categoría, estado, asignado, puntuación, etc."
+        ),
+        tags=["exports"],
+        parameters=[
+            OpenApiParameter(
+                name="category",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID de categoría para filtrar leads (opcional)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="status",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID de estado para filtrar leads (opcional)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="is_client",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Filtrar por leads que son clientes (true/false) (opcional)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Archivo CSV con los leads exportados",
+                "content": {
+                    "text/csv": {
+                        "schema": {
+                            "type": "string",
+                            "format": "binary",
+                        }
+                    }
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def leads_csv(self, request) -> HttpResponse:
         """Export leads to CSV."""
@@ -80,6 +126,51 @@ class ExportViewSet(viewsets.ViewSet):
 
         return response
 
+    @extend_schema(
+        summary="Exportar leads a PDF",
+        description=(
+            "Exporta los leads a un archivo PDF. Permite filtrar por categoría, "
+            "estado y si son clientes. El PDF incluye una tabla con información resumida "
+            "de cada lead. Limitado a 100 registros para mantener el tamaño del archivo."
+        ),
+        tags=["exports"],
+        parameters=[
+            OpenApiParameter(
+                name="category",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID de categoría para filtrar leads (opcional)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="status",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID de estado para filtrar leads (opcional)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="is_client",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Filtrar por leads que son clientes (true/false) (opcional)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Archivo PDF con los leads exportados",
+                "content": {
+                    "application/pdf": {
+                        "schema": {
+                            "type": "string",
+                            "format": "binary",
+                        }
+                    }
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def leads_pdf(self, request) -> HttpResponse:
         """Export leads to PDF."""
@@ -162,6 +253,51 @@ class ExportViewSet(viewsets.ViewSet):
         response["Content-Disposition"] = 'attachment; filename="leads_export.pdf"'
         return response
 
+    @extend_schema(
+        summary="Exportar contactos a CSV",
+        description=(
+            "Exporta los contactos a un archivo CSV. Permite filtrar por lead, "
+            "si es contacto principal o si es tomador de decisiones. El archivo incluye "
+            "información completa de cada contacto como nombre, email, teléfono, posición, etc."
+        ),
+        tags=["exports"],
+        parameters=[
+            OpenApiParameter(
+                name="lead",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID del lead para filtrar contactos (opcional)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="is_primary",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Filtrar por contactos principales (true/false) (opcional)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="is_decision_maker",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Filtrar por tomadores de decisiones (true/false) (opcional)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Archivo CSV con los contactos exportados",
+                "content": {
+                    "text/csv": {
+                        "schema": {
+                            "type": "string",
+                            "format": "binary",
+                        }
+                    }
+                },
+            }
+        },
+    )
     @action(detail=False, methods=["get"])
     def contacts_csv(self, request) -> HttpResponse:
         """Export contacts to CSV."""

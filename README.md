@@ -78,28 +78,164 @@ python manage.py generate_mock_data \
     --api-credentials 3 \
     --clear
 
+## Desarrollo Local
+
+### Requisitos Previos
+
+- Python 3.11 o superior
+- PostgreSQL 12 o superior
+- pip (gestor de paquetes de Python)
+- (Opcional) Redis para caché (no es obligatorio para desarrollo local)
+
+### Pasos para Configurar el Proyecto
+
+#### 1. Clonar el Repositorio
+
+```bash
+git clone <repository-url>
+cd backend
+```
+
+#### 2. Crear y Activar un Entorno Virtual
+
+**Usando venv (recomendado para Python 3.3+):**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+```
+
+**O usando virtualenv:**
+
+```bash
+pip install virtualenv
+virtualenv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+```
+
+#### 3. Instalar Dependencias
+
+```bash
+pip install -r requirements/local.txt
+```
+
+#### 4. Configurar Base de Datos PostgreSQL
+
+Asegúrate de tener PostgreSQL corriendo y crea una base de datos:
+
+```bash
+# Conectarse a PostgreSQL
+psql -U postgres
+
+# Crear la base de datos
+CREATE DATABASE crm;
+
+# Salir de psql
+\q
+```
+
+#### 5. Configurar Variables de Entorno
+
+Crea un archivo `.env` en la raíz del proyecto (opcional, el proyecto tiene valores por defecto):
+
+```bash
+# .env
+DJANGO_DEBUG=True
+DJANGO_SECRET_KEY=tu-secret-key-aqui
+DATABASE_URL=postgres://postgres:2323@localhost:5432/crm
+DJANGO_READ_DOT_ENV_FILE=True
+```
+
+**Nota:** Si no creas el archivo `.env`, el proyecto usará valores por defecto:
+- `DATABASE_URL`: `postgres://postgres:2323@localhost:5432/crm`
+- `DJANGO_SECRET_KEY`: Se genera automáticamente para desarrollo local
+- `DJANGO_DEBUG`: `True` en modo local
+
+#### 6. Aplicar Migraciones
+
+```bash
+python manage.py migrate
+```
+
+#### 7. Crear un Superusuario (Opcional)
+
+```bash
+python manage.py createsuperuser
+```
+
+#### 8. Generar Datos de Prueba (Opcional)
+
+```bash
+# Generar datos con valores por defecto
+python manage.py generate_mock_data
+
+# O personalizar la cantidad de datos
+python manage.py generate_mock_data \
+    --leads 50 \
+    --contacts-per-lead 3 \
+    --activities 100 \
+    --tasks 50
+```
+
+#### 9. Ejecutar el Servidor de Desarrollo
+
+```bash
+python manage.py runserver
+```
+
+El servidor estará disponible en: `http://localhost:8000`
+
+### Acceder a la Documentación de la API
+
+Una vez que el servidor esté corriendo, puedes acceder a:
+
+- **Swagger UI**: `http://localhost:8000/api/schema/swagger-ui/`
+- **ReDoc**: `http://localhost:8000/api/schema/redoc/`
+- **Schema JSON**: `http://localhost:8000/api/schema/`
+
+### Comandos Útiles
+
+```bash
+# Ejecutar tests
+pytest
+
+# Verificar tipos con mypy
+mypy crm
+
+# Ejecutar linter
+ruff check .
+
+# Formatear código
+ruff format .
+
+# Crear migraciones
+python manage.py makemigrations
+
+# Aplicar migraciones
+python manage.py migrate
+
+# Recolectar archivos estáticos
+python manage.py collectstatic
+```
+
+### Solución de Problemas
+
+**Error de conexión a la base de datos:**
+- Verifica que PostgreSQL esté corriendo: `sudo service postgresql status`
+- Verifica las credenciales en `DATABASE_URL`
+- Asegúrate de que la base de datos `crm` exista
+
+**Error de dependencias:**
+- Asegúrate de estar en el entorno virtual activado
+- Reinstala las dependencias: `pip install -r requirements/local.txt --upgrade`
+
+**Error de migraciones:**
+- Si hay conflictos, puedes resetear las migraciones (¡cuidado en producción!):
+  ```bash
+  python manage.py migrate --run-syncdb
+  ```
+
 ## Deployment
 
-# Local:
-- Create and activate a virtual environment (using `venv` or `virtualenv`):
-
-    # Using venv (Python 3.3+ recommended)
-    python3 -m venv venv
-    source venv/bin/activate
-
-    # Or using virtualenv
-    pip install virtualenv
-    virtualenv venv
-    source venv/bin/activate
-
-- Install dependencies:
-    pip install -r requirements/local.txt
-
-- Set up your environment variables (see `.env.example` for reference)
-- Apply database migrations:
-    python manage.py migrate
-- Run the development server:
-    python manage.py runserver
-    
-# Production:
-- Railway, more details soon
+### Producción:
+- Railway, más detalles próximamente
