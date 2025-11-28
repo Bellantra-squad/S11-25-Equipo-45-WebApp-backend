@@ -367,3 +367,4 @@ SPECTACULAR_SETTINGS = {
 }
 # Your stuff...
 # ------------------------------------------------------------------------------
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = "BruceWayne"
