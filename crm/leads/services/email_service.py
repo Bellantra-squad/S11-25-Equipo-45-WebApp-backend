@@ -3,9 +3,9 @@
 import logging
 from typing import Dict, List, Optional
 
+import requests
 from django.conf import settings
 from django.core.mail import EmailMessage, get_connection
-from django.core.mail.backends.smtp import EmailBackend
 
 from crm.leads.models import ApiCredential, EmailTemplate
 
@@ -126,8 +126,6 @@ class EmailService:
     ) -> Dict[str, any]:
         """Send email via Brevo API."""
         try:
-            import requests
-
             api_key = (
                 self.api_credential.api_key
                 if self.api_credential
@@ -149,9 +147,17 @@ class EmailService:
                 "sender": {"email": from_email or getattr(settings, "DEFAULT_FROM_EMAIL", "")},
                 "to": [{"email": email} for email in to],
                 "subject": subject,
-                "htmlContent": html_body or body,
-                "textContent": body if not html_body else None,
             }
+
+            # Set content based on what's available
+            if html_body:
+                payload["htmlContent"] = html_body
+                # Include textContent as fallback for email clients that don't support HTML
+                if body:
+                    payload["textContent"] = body
+            else:
+                # Plain text email
+                payload["textContent"] = body
 
             if cc:
                 payload["cc"] = [{"email": email} for email in cc]
@@ -185,8 +191,9 @@ class EmailService:
         body = template.body
 
         for key, value in context.items():
-            subject = subject.replace(f"{{{{{key}}}}}}}", str(value))
-            body = body.replace(f"{{{{{key}}}}}}}", str(value))
+            pattern = "{{" + key + "}}"  # Produces {{key}}
+            subject = subject.replace(pattern, str(value))
+            body = body.replace(pattern, str(value))
 
         return self.send_email(
             to=to,
@@ -221,4 +228,3 @@ class EmailService:
         except (KeyError, TypeError) as e:
             logger.error(f"Error parsing email webhook: {e}")
             return None
-
