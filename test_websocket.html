@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Activity Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 1.2em;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            padding: 20px;
+            background: #f5f5f5;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .controls input {
+            flex: 1;
+            min-width: 300px;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-connect {
+            background: #44ff44;
+            color: #333;
+        }
+
+        .btn-disconnect {
+            background: #ff4444;
+            color: white;
+        }
+
+        .btn-ping {
+            background: #4444ff;
+            color: white;
+        }
+
+        .btn-info {
+            background: #ff9944;
+            color: white;
+        }
+
+        .btn-clear {
+            background: #999;
+            color: white;
+        }
+
+        .messages {
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .message {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid;
+            background: #f9f9f9;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .message-time {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .message.connection_established {
+            border-left-color: #44ff44;
+            background: #e8ffe8;
+        }
+
+        .message.activity_created {
+            border-left-color: #4444ff;
+            background: #e8e8ff;
+        }
+
+        .message.pong {
+            border-left-color: #ff9944;
+            background: #fff4e8;
+        }
+
+        .message.info {
+            border-left-color: #44ffff;
+            background: #e8ffff;
+        }
+
+        .message.error {
+            border-left-color: #ff4444;
+            background: #ffe8e8;
+        }
+
+        .activity-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .activity-detail {
+            padding: 8px;
+            background: white;
+            border-radius: 3px;
+        }
+
+        .activity-detail strong {
+            display: block;
+            color: #666;
+            font-size: 0.85em;
+            margin-bottom: 3px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .badge-call { background: #e3f2fd; color: #1976d2; }
+        .badge-email { background: #f3e5f5; color: #7b1fa2; }
+        .badge-meeting { background: #e8f5e9; color: #388e3c; }
+        .badge-note { background: #fff3e0; color: #f57c00; }
+        .badge-task { background: #fce4ec; color: #c2185b; }
+        .badge-message { background: #e0f2f1; color: #00796b; }
+        .badge-status_change { background: #fff9c4; color: #f57f17; }
+        .badge-other { background: #f5f5f5; color: #616161; }
+
+        .stats {
+            padding: 20px;
+            background: #f5f5f5;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 WebSocket Activity Tester</h1>
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Desconectado</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input
+                type="text"
+                id="wsUrl"
+                value="ws://localhost:8000/ws/activities/"
+                placeholder="WebSocket URL"
+            />
+            <input
+                type="text"
+                id="authToken"
+                placeholder="DRF Auth Token (opcional)"
+                style="flex: 1; min-width: 200px;"
+            />
+            <button class="btn-connect" id="btnConnect">Conectar</button>
+            <button class="btn-disconnect" id="btnDisconnect" disabled>Desconectar</button>
+            <button class="btn-ping" id="btnPing" disabled>📤 Ping</button>
+            <button class="btn-info" id="btnInfo" disabled>ℹ️ Info</button>
+            <button class="btn-clear" id="btnClear">🗑️ Limpiar</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="totalMessages">0</div>
+                <div class="stat-label">Mensajes</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="totalActivities">0</div>
+                <div class="stat-label">Actividades</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="activeConnections">-</div>
+                <div class="stat-label">Conexiones</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="uptime">00:00</div>
+                <div class="stat-label">Tiempo Conectado</div>
+            </div>
+        </div>
+
+        <div class="messages" id="messages">
+            <p style="text-align: center; color: #999;">
+                Conecta al WebSocket para comenzar a recibir eventos...
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+        let activityCount = 0;
+        let connectTime = null;
+        let uptimeInterval = null;
+
+        const elements = {
+            statusDot: document.getElementById('statusDot'),
+            statusText: document.getElementById('statusText'),
+            wsUrl: document.getElementById('wsUrl'),
+            authToken: document.getElementById('authToken'),
+            btnConnect: document.getElementById('btnConnect'),
+            btnDisconnect: document.getElementById('btnDisconnect'),
+            btnPing: document.getElementById('btnPing'),
+            btnInfo: document.getElementById('btnInfo'),
+            btnClear: document.getElementById('btnClear'),
+            messages: document.getElementById('messages'),
+            totalMessages: document.getElementById('totalMessages'),
+            totalActivities: document.getElementById('totalActivities'),
+            activeConnections: document.getElementById('activeConnections'),
+            uptime: document.getElementById('uptime')
+        };
+
+        function updateStatus(connected) {
+            elements.statusDot.classList.toggle('connected', connected);
+            elements.statusText.textContent = connected ? 'Conectado' : 'Desconectado';
+            elements.btnConnect.disabled = connected;
+            elements.btnDisconnect.disabled = !connected;
+            elements.btnPing.disabled = !connected;
+            elements.btnInfo.disabled = !connected;
+
+            if (connected) {
+                connectTime = Date.now();
+                updateUptime();
+                uptimeInterval = setInterval(updateUptime, 1000);
+            } else {
+                connectTime = null;
+                if (uptimeInterval) {
+                    clearInterval(uptimeInterval);
+                    uptimeInterval = null;
+                }
+                elements.uptime.textContent = '00:00';
+            }
+        }
+
+        function updateUptime() {
+            if (!connectTime) return;
+            const seconds = Math.floor((Date.now() - connectTime) / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            elements.uptime.textContent =
+                `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function addMessage(type, data) {
+            messageCount++;
+            elements.totalMessages.textContent = messageCount;
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const now = new Date().toLocaleTimeString();
+            let content = `
+                <div class="message-header">
+                    <span>${getTypeIcon(type)} ${type}</span>
+                    <span class="message-time">${now}</span>
+                </div>
+            `;
+
+            if (type === 'activity_created') {
+                activityCount++;
+                elements.totalActivities.textContent = activityCount;
+                const activity = data.data;
+                content += `
+                    <div class="activity-details">
+                        <div class="activity-detail">
+                            <strong>ID</strong>
+                            ${activity.id}
+                        </div>
+                        <div class="activity-detail">
+                            <strong>Tipo</strong>
+                            <span class="badge badge-${activity.activity_type}">
+                                ${activity.activity_type}
+                            </span>
+                        </div>
+                        <div class="activity-detail">
+                            <strong>Usuario</strong>
+                            ${activity.user ? activity.user.name : 'N/A'}
+                        </div>
+                        <div class="activity-detail">
+                            <strong>Lead ID</strong>
+                            ${activity.lead_id || 'N/A'}
+                        </div>
+                    </div>
+                    <div class="activity-detail" style="margin-top: 10px;">
+                        <strong>Descripción</strong>
+                        ${activity.description}
+                    </div>
+                `;
+            } else if (type === 'info') {
+                elements.activeConnections.textContent = data.connections || '-';
+                content += `<p>Canal: <strong>${data.channel}</strong></p>`;
+                content += `<p>Conexiones activas: <strong>${data.connections}</strong></p>`;
+            } else {
+                content += `<p>${data.message || JSON.stringify(data)}</p>`;
+            }
+
+            content += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            messageDiv.innerHTML = content;
+
+            elements.messages.insertBefore(messageDiv, elements.messages.firstChild);
+
+            // Limitar a 50 mensajes
+            while (elements.messages.children.length > 50) {
+                elements.messages.removeChild(elements.messages.lastChild);
+            }
+        }
+
+        function getTypeIcon(type) {
+            const icons = {
+                connection_established: '🎉',
+                activity_created: '🆕',
+                pong: '💓',
+                info: 'ℹ️',
+                error: '❌'
+            };
+            return icons[type] || '📨';
+        }
+
+        function connect() {
+            let url = elements.wsUrl.value;
+            const token = elements.authToken.value.trim();
+            
+            // Agregar token como query parameter
+            if (token) {
+                url = `${url}${url.includes('?') ? '&' : '?'}token=${token}`;
+                console.log('🔑 Con token de autenticación');
+            }
+            
+            console.log('Conectando a:', url);
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = () => {
+                    console.log('✅ Conectado' + (token ? ' (autenticado)' : ''));
+                    updateStatus(true);
+                };
+
+                ws.onmessage = (event) => {
+                    console.log('📨 Mensaje:', event.data);
+                    try {
+                        const data = JSON.parse(event.data);
+                        addMessage(data.type, data);
+                    } catch (e) {
+                        console.error('Error parseando mensaje:', e);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('❌ Error:', error);
+                };
+
+                ws.onclose = () => {
+                    console.log('🔌 Desconectado');
+                    updateStatus(false);
+                    ws = null;
+                };
+
+            } catch (error) {
+                console.error('Error creando WebSocket:', error);
+                alert('Error al conectar: ' + error.message);
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                updateStatus(false);
+            }
+        }
+
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                console.log('📤 Enviado:', message);
+            } else {
+                alert('No estás conectado');
+            }
+        }
+
+        function clearMessages() {
+            elements.messages.innerHTML = `
+                <p style="text-align: center; color: #999;">
+                    Mensajes limpiados
+                </p>
+            `;
+            messageCount = 0;
+            activityCount = 0;
+            elements.totalMessages.textContent = '0';
+            elements.totalActivities.textContent = '0';
+        }
+
+        // Event listeners
+        elements.btnConnect.addEventListener('click', connect);
+        elements.btnDisconnect.addEventListener('click', disconnect);
+        elements.btnPing.addEventListener('click', () => sendMessage({ action: 'ping' }));
+        elements.btnInfo.addEventListener('click', () => sendMessage({ action: 'info' }));
+        elements.btnClear.addEventListener('click', clearMessages);
+
+        // Auto-connect on load (optional)
+        // connect();
+
+        // NOTE: Authentication works via query parameter (?token=YOUR_TOKEN)
+        console.log('💡 Tip: Para usar autenticación, ingresa tu token DRF en el campo "Auth Token"');
+        console.log('✅ El token se envía automáticamente como query parameter');
+    </script>
+</body>
+</html>
+

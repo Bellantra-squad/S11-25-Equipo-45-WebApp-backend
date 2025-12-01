@@ -77,7 +77,6 @@ class LeadOrchestrator:
                     sent_at=timezone.now(),
                 )
 
-                # Create Activity
                 Activity.objects.create(
                     lead=lead,
                     contact=contact,

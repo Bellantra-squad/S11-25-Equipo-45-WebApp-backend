@@ -321,6 +321,12 @@ CORS_ALLOWED_ORIGINS = env.list(
 # https://github.com/adamchainz/django-cors-headers#cors_allowed_origin_regexes-sequencestr | regex
 CORS_ALLOW_CREDENTIALS = True
 
+# WebSocket Settings
+# ------------------------------------------------------------------------------
+WEBSOCKET_RATE_LIMIT_MESSAGES = 60  # messages per minute
+WEBSOCKET_RATE_LIMIT_WINDOW = 60  # seconds
+WEBSOCKET_REQUIRE_AUTH = True  # Set False to allow anonymous connections
+
 # By Default swagger ui is available only to admin user(s). You can change permission classes to change that
 # See more configuration options at https://drf-spectacular.readthedocs.io/en/latest/settings.html#settings
 SPECTACULAR_SETTINGS = {
