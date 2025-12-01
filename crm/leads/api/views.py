@@ -8,6 +8,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, OpenApiTypes
 
 from crm.core.utils.pagination import DefaultPageNumberPagination
 from crm.leads.api.serializers import (
@@ -768,6 +769,52 @@ class ApiCredentialViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
     pagination_class = DefaultPageNumberPagination
 
+    @extend_schema(
+        methods=["POST"],
+        summary="Prueba de envío de email con Brevo",
+        description=(
+            "Envía un email de prueba utilizando la API de Brevo para verificar la configuración de la integración de emails."
+        ),
+        request=OpenApiTypes.OBJECT,
+        examples=[
+            OpenApiExample(
+                "Ejemplo de payload",
+                value={"email": "test@ejemplo.com"},
+                request_only=True,
+                description="Correo electrónico al cual se enviará el email de prueba.",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Email de prueba enviado exitosamente",
+                examples=[
+                    {
+                        "message": "Email de prueba enviado exitosamente",
+                        "email": "test@ejemplo.com",
+                        "message_id": "abc123"
+                    }
+                ]
+            ),
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Dirección de email requerida",
+                examples=[
+                    {"error": "Email address is required"}
+                ]
+            ),
+            500: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description="Error al enviar el email",
+                examples=[
+                    {
+                        "error": "Error al enviar email de prueba",
+                        "details": "Detalle del error"
+                    }
+                ]
+            )
+        }
+    )
     @action(detail=False, methods=["post"], url_path="test-brevo")
     def test_brevo(self, request):
         """
