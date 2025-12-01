@@ -789,28 +789,40 @@ class ApiCredentialViewSet(viewsets.ModelViewSet):
                 response=OpenApiTypes.OBJECT,
                 description="Email de prueba enviado exitosamente",
                 examples=[
-                    {
-                        "message": "Email de prueba enviado exitosamente",
-                        "email": "test@ejemplo.com",
-                        "message_id": "abc123"
-                    }
+                    OpenApiExample(
+                        "Respuesta exitosa",
+                        value={
+                            "message": "Email de prueba enviado exitosamente",
+                            "email": "test@ejemplo.com",
+                            "message_id": "abc123"
+                        },
+                        response_only=True,
+                    )
                 ]
             ),
             400: OpenApiResponse(
                 response=OpenApiTypes.OBJECT,
                 description="Dirección de email requerida",
                 examples=[
-                    {"error": "Email address is required"}
+                    OpenApiExample(
+                        "Email requerido",
+                        value={"error": "Email address is required"},
+                        response_only=True,
+                    )
                 ]
             ),
             500: OpenApiResponse(
                 response=OpenApiTypes.OBJECT,
                 description="Error al enviar el email",
                 examples=[
-                    {
-                        "error": "Error al enviar email de prueba",
-                        "details": "Detalle del error"
-                    }
+                    OpenApiExample(
+                        "Error en envío",
+                        value={
+                            "error": "Error al enviar email de prueba",
+                            "details": "Detalle del error"
+                        },
+                        response_only=True,
+                    )
                 ]
             )
         }
