@@ -1,6 +1,7 @@
 """Email service for SMTP and Brevo integration."""
 
 import logging
+import re
 from typing import Dict, List, Optional
 
 import requests
@@ -28,6 +29,35 @@ class EmailService:
 
             if self.api_credential:
                 self.use_brevo = self.api_credential.credential_type == "email_brevo"
+
+    @staticmethod
+    def _parse_email_address(email_string: str) -> Dict[str, str]:
+        """
+        Parse email address string into email and name components.
+
+        Supports formats:
+        - "email@example.com"
+        - "Name <email@example.com>"
+        - "Name Name <email@example.com>"
+
+        Args:
+            email_string: Email string to parse
+
+        Returns:
+            Dictionary with 'email' and optionally 'name' keys
+        """
+        if not email_string:
+            return {"email": ""}
+
+        # Try to match "Name <email@example.com>" format
+        match = re.match(r'^(.+?)\s*<(.+?)>$', email_string.strip())
+        if match:
+            name = match.group(1).strip()
+            email = match.group(2).strip()
+            return {"email": email, "name": name}
+
+        # If no angle brackets, assume it's just an email
+        return {"email": email_string.strip()}
 
     def send_email(
         self,
@@ -143,8 +173,16 @@ class EmailService:
                 "Content-Type": "application/json",
             }
 
+            # Parse sender email to extract email and name
+            sender_string = from_email or getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            sender = self._parse_email_address(sender_string)
+
+            # Validate sender email
+            if not sender.get("email"):
+                raise ValueError("Sender email address is required")
+
             payload = {
-                "sender": {"email": from_email or getattr(settings, "DEFAULT_FROM_EMAIL", "")},
+                "sender": sender,
                 "to": [{"email": email} for email in to],
                 "subject": subject,
             }
