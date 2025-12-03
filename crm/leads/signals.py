@@ -21,7 +21,7 @@ def activity_created(sender, instance, created, **kwargs):
 
     try:
         # Import here to avoid circular imports
-        from config.websocket_manager import manager
+        from config.ws.manager import manager
 
         # Prepare the activity data
         activity_data = {
