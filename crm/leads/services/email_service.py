@@ -244,11 +244,22 @@ class EmailService:
         """
         Parse incoming email webhook (Brevo).
 
+        Supports two formats:
+        1. Brevo Transactional (inbound email): event = "inbound_email_processed"
+        2. Brevo Conversations: event_name = "message_received", source = "Conversations"
+
         Returns:
             Parsed email data or None
         """
         try:
-            # Brevo webhook format
+            # Check for Brevo Conversations format
+            event_name = webhook_data.get("event_name")
+            source = webhook_data.get("source")
+
+            if event_name == "message_received" or source == "Conversations":
+                return self._parse_brevo_conversations_webhook(webhook_data)
+
+            # Brevo Transactional webhook format
             event_type = webhook_data.get("event")
             if event_type not in ["inbound_email_processed"]:
                 return None
@@ -265,4 +276,69 @@ class EmailService:
             }
         except (KeyError, TypeError) as e:
             logger.error(f"Error parsing email webhook: {e}")
+            return None
+
+    def _parse_brevo_conversations_webhook(
+        self, webhook_data: Dict
+    ) -> Optional[Dict[str, any]]:
+        """
+        Parse Brevo Conversations webhook format.
+
+        Expected format:
+        {
+            "source": "Conversations",
+            "event_name": "message_received",
+            "message": {
+                "from": {"email": "..."},
+                "to": [{"email": "..."}],
+                "id": "...",
+                "createdAt": 1234567890,
+                "receivedFrom": "email",
+                "text": "..." (optional)
+            },
+            "visitor": {"displayedName": "..."},
+            "conversationId": "...",
+            "contact_id": 123,
+            "identifiers": {"email_id": "..."}
+        }
+        """
+        try:
+            message = webhook_data.get("message", {})
+            visitor = webhook_data.get("visitor", {})
+            identifiers = webhook_data.get("identifiers", {})
+
+            # Get sender email from message.from or identifiers.email_id
+            from_data = message.get("from", {})
+            from_email = from_data.get("email", "") or identifiers.get("email_id", "")
+
+            # Get sender name from visitor.displayedName
+            from_name = visitor.get("displayedName", "")
+
+            # Get recipient email
+            to_list = message.get("to", [])
+            to_email = to_list[0].get("email", "") if to_list else ""
+
+            # Get message content (text or html)
+            body = message.get("text", "") or message.get("html", "") or ""
+
+            # Get message ID
+            message_id = message.get("id", "") or webhook_data.get("conversationId", "")
+
+            # Get timestamp
+            created_at = message.get("createdAt", "")
+
+            return {
+                "from_email": from_email,
+                "from_name": from_name,
+                "to_email": to_email,
+                "subject": f"Mensaje de {from_name or from_email}",  # Conversations don't have subject
+                "body": body,
+                "message_id": message_id,
+                "timestamp": created_at,
+                "conversation_id": webhook_data.get("conversationId", ""),
+                "contact_id": webhook_data.get("contact_id"),
+                "received_from": message.get("receivedFrom", "email"),
+            }
+        except (KeyError, TypeError, IndexError) as e:
+            logger.error(f"Error parsing Brevo Conversations webhook: {e}")
             return None

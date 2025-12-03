@@ -131,8 +131,11 @@ class EmailWebhookView(View):
             # Process webhook
             orchestrator = LeadOrchestrator()
 
-            # Check if this is a status update or an inbound email
+            # Check if this is a status update or inbound message
+            # (supports Brevo Transactional and Brevo Conversations)
             event_type = body.get("event", "")
+
+            # Status events from Brevo Transactional
             is_status_event = event_type in [
                 "delivered",
                 "opened",
@@ -148,6 +151,7 @@ class EmailWebhookView(View):
             if is_status_event:
                 result = orchestrator.process_brevo_status_webhook(body)
             else:
+                # Process as inbound message (Conversations or transactional)
                 result = orchestrator.process_email_webhook(body)
 
             if result.get("success"):
