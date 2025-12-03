@@ -29,28 +29,11 @@ RUN python -m pip install --upgrade pip setuptools wheel \
 # Copy project files
 COPY . .
 
-# Create an entrypoint script to run migrations before starting the server
-RUN echo '#!/bin/bash\n\
-    set -e\n\
-    \n\
-    # Wait for database to be ready\n\
-    echo "Waiting for database..."\n\
-    sleep 5\n\
-    \n\
-    # Run migrations\n\
-    echo "Running migrations..."\n\
-    python manage.py migrate --noinput || true\n\
-    \n\
-    # Collect static files if in production\n\
-    if [ "$BUILD_ENV" = "production" ]; then\n\
-    echo "Collecting static files..."\n\
-    python manage.py collectstatic --noinput || true\n\
-    fi\n\
-    \n\
-    # Start server\n\
-    echo "Starting server..."\n\
-    exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT\n' > /app/entrypoint.sh \
-    && chmod +x /app/entrypoint.sh
+# Make entrypoint executable (uses existing entrypoint.sh with ASGI + uvicorn worker)
+RUN chmod +x /app/entrypoint.sh
 
-# Command to run the application
+# Expose port
+EXPOSE 8000
+
+# Command to run the application with ASGI support for WebSockets
 CMD ["/app/entrypoint.sh"]
