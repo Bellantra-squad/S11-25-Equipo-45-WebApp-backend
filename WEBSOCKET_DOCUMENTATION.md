@@ -22,9 +22,10 @@ Documentación completa del sistema de WebSockets para recibir notificaciones en
 
 ### URLs de Conexión
 
-| Entorno | URL |
-|---------|-----|
-| **Desarrollo** | `ws://localhost:8000/ws/activities/` |
+
+| Entorno         | URL                                                                               |
+| --------------- | --------------------------------------------------------------------------------- |
+| **Desarrollo**  | `ws://localhost:8000/ws/activities/`                                              |
 | **Producción** | `wss://s11-25-equipo-45-webapp-backend-development.up.railway.app/ws/activities/` |
 
 ### Conexión Básica con Autenticación
@@ -107,25 +108,31 @@ ws.onclose = (event) => {
 ## 📡 Canales Disponibles
 
 ### 1. Activities Channel - `/ws/activities/`
+
 Recibe notificaciones cuando se crea una nueva Activity.
 
 **Eventos:**
+
 - `activity_created` - Nueva actividad creada
 - `connection_established` - Conexión exitosa
 - `pong` - Respuesta a ping
 
 ### 2. Health Check Channel - `/ws/health/`
+
 Verifica el estado del sistema WebSocket.
 
 **Responde con:**
+
 - Total de conexiones activas
 - Conexiones por canal
 - Estadísticas del rate limiter
 
 ### 3. General Channel - `/ws/`
+
 Canal general para otros eventos (futuro).
 
 ### 4. Tasks Channel - `/ws/tasks/`
+
 Canal para eventos de tareas (futuro).
 
 ---
@@ -165,7 +172,7 @@ export const useActivityWebSocket = (token, onActivityCreated) => {
 
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
-        
+      
         switch (message.type) {
           case 'connection_established':
             console.log('🎉', message.message);
@@ -253,7 +260,7 @@ export const ActivityNotifications = ({ token }) => {
 
   const handleNewActivity = (activity) => {
     setActivities((prev) => [activity, ...prev]);
-    
+  
     toast.success(
       `Nueva actividad: ${activity.activity_type} - ${activity.description}`,
       { position: 'top-right', autoClose: 5000 }
@@ -478,6 +485,7 @@ ws.onmessage = (event) => {
 Enviar: `{"action": "info"}`
 
 Respuesta:
+
 ```json
 {
   "type": "info",
@@ -579,6 +587,7 @@ open test_websocket.html
 ```
 
 Características:
+
 - Campo para ingresar token
 - Botones para ping/info
 - Visualización de mensajes en tiempo real
@@ -614,11 +623,13 @@ ws.onopen = () => ws.send(JSON.stringify({ action: 'ping' }));
 ### 4. Crear Activity de Prueba
 
 #### Desde Admin
+
 1. Ir a `http://localhost:8000/admin/leads/activity/`
 2. Crear nueva activity
 3. Ver evento en cliente WebSocket
 
 #### Desde API
+
 ```bash
 curl -X POST http://localhost:8000/api/activities/ \
   -H "Content-Type: application/json" \
@@ -630,6 +641,7 @@ curl -X POST http://localhost:8000/api/activities/ \
 ```
 
 #### Desde Django Shell
+
 ```python
 python manage.py shell
 
@@ -653,6 +665,7 @@ Activity.objects.create(
 **Síntomas:** Error 404 o conexión rechazada
 
 **Soluciones:**
+
 1. ✅ Verifica que uses `uvicorn`, NO `runserver`
    ```bash
    uvicorn config.asgi:application --reload
@@ -665,6 +678,7 @@ Activity.objects.create(
 **Síntomas:** Conexión se cierra inmediatamente
 
 **Soluciones:**
+
 1. ✅ Verifica que el token sea válido
    ```bash
    curl -H "Authorization: Token YOUR_TOKEN" http://localhost:8000/api/users/
@@ -685,6 +699,7 @@ Activity.objects.create(
 **Síntomas:** Conectado pero sin eventos
 
 **Soluciones:**
+
 1. ✅ Verifica que estés en el canal correcto (`/ws/activities/`)
 2. ✅ Crea una activity desde el admin (NO desde shell)
 3. ✅ Revisa los logs del servidor
@@ -699,6 +714,7 @@ Activity.objects.create(
 **Síntomas:** Mensaje `rate_limit_exceeded`
 
 **Soluciones:**
+
 1. ✅ Reduce frecuencia de mensajes (max 60/minuto)
 2. ✅ Espera 60 segundos para reset
 3. ✅ Implementa throttling en el cliente
@@ -708,6 +724,7 @@ Activity.objects.create(
 **Síntomas:** Error en consola del navegador
 
 **Soluciones:**
+
 1. ✅ Agrega tu origen a `CORS_ALLOWED_ORIGINS`
 2. ✅ Verifica `CORS_ALLOW_CREDENTIALS = True`
 3. ✅ En producción, agrega el dominio del frontend
@@ -785,37 +802,23 @@ ws.onclose = (event) => {
 ## 📚 Recursos
 
 ### Documentación
+
 - [WebSocket API MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
 - [Django Channels Docs](https://channels.readthedocs.io/)
 - [Django Signals](https://docs.djangoproject.com/en/5.1/topics/signals/)
 - [ASGI Specification](https://asgi.readthedocs.io/)
 
 ### Tutoriales
+
 - [React WebSocket Tutorial](https://dev.to/finallynero/using-websockets-in-react-4fkp)
 - [Railway WebSocket Guide](https://docs.railway.app/guides/websockets)
 
 ### Herramientas de Testing
+
 - `test_websocket.html` - Interfaz web interactiva
 - `test_websocket.py` - Script Python de testing
 - [Postman WebSocket](https://www.postman.com/websocket/)
 - [websocat](https://github.com/vi/websocat) - CLI WebSocket client
-
----
-
-## 🎯 Próximas Mejoras
-
-- [ ] Canales privados por usuario
-- [ ] Filtrado de actividades por lead/contact
-- [ ] Canal de Tasks con notificaciones
-- [ ] Canal de Messages para chat en tiempo real
-- [ ] Presence system (ver quién está online)
-- [ ] Typing indicators
-- [ ] Read receipts
-- [ ] JWT authentication como alternativa
-- [ ] Redis para broadcasting multi-worker
-- [ ] Compresión de mensajes (WebSocket permessage-deflate)
-
----
 
 ## 📝 Notas Finales
 
@@ -828,4 +831,3 @@ ws.onclose = (event) => {
 **¿Preguntas?** Revisa la documentación o los archivos de testing.
 
 🚀 **¡El sistema está listo para usar!**
-
