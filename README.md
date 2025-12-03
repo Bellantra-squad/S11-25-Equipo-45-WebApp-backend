@@ -18,31 +18,26 @@ Moved to [settings](https://cookiecutter-django.readthedocs.io/en/latest/1-getti
 ### Setting Up Your Users
 
 - To create a **normal user account**, just go to Sign Up and fill out the form. Once you submit it, you'll see a "Verify Your E-mail Address" page. Go to your console to see a simulated email verification message. Copy the link into your browser. Now the user's email should be verified and ready to go.
-
 - To create a **superuser account**, use this command:
 
-      $ python manage.py createsuperuser
-
+  $ python manage.py createsuperuser
 For convenience, you can keep your normal user logged in on Chrome and your superuser logged in on Firefox (or similar), so that you can see how the site behaves for both kinds of users.
 
 ### Type checks
 
 Running type checks with mypy:
 
-    $ mypy crm
-
+$ mypy crm
 ### Test coverage
 
 To run the tests, check your test coverage, and generate an HTML coverage report:
 
-    $ coverage run -m pytest
-    $ coverage html
-    $ open htmlcov/index.html
-
+$ coverage run -m pytest
+$ coverage html
+$ open htmlcov/index.html
 #### Running tests with pytest
 
-    $ pytest
-
+$ pytest
 ### Mock Data
 
 # Basic usage - uses default values
@@ -51,11 +46,11 @@ python manage.py generate_mock_data
 
 # Customize the amount of data
 
-python manage.py generate_mock_data \
-    --leads 50 \
-    --contacts-per-lead 3 \
-    --activities 100 \
-    --tasks 50
+python manage.py generate_mock_data 
+--leads 50 
+--contacts-per-lead 3 
+--activities 100 
+--tasks 50
 
 # Clear existing data before generating
 
@@ -63,20 +58,20 @@ python manage.py generate_mock_data --clear
 
 # Full customization
 
-python manage.py generate_mock_data \
-    --categories 10 \
-    --tags 20 \
-    --users 10 \
-    --leads 50 \
-    --contacts-per-lead 3 \
-    --activities 100 \
-    --tasks 50 \
-    --conversations 40 \
-    --messages-per-conversation 10 \
-    --email-templates 8 \
-    --saved-filters 15 \
-    --api-credentials 3 \
-    --clear
+python manage.py generate_mock_data 
+--categories 10 
+--tags 20 
+--users 10 
+--leads 50 
+--contacts-per-lead 3 
+--activities 100 
+--tasks 50 
+--conversations 40 
+--messages-per-conversation 10 
+--email-templates 8 
+--saved-filters 15 
+--api-credentials 3 
+--clear
 
 ## Desarrollo Local
 
@@ -95,7 +90,6 @@ python manage.py generate_mock_data \
 git clone <repository-url>
 cd backend
 ```
-
 #### 2. Crear y Activar un Entorno Virtual
 
 **Usando venv (recomendado para Python 3.3+):**
@@ -104,7 +98,6 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
-
 **O usando virtualenv:**
 
 ```bash
@@ -112,13 +105,11 @@ pip install virtualenv
 virtualenv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
-
 #### 3. Instalar Dependencias
 
 ```bash
 pip install -r requirements/local.txt
 ```
-
 #### 4. Configurar Base de Datos PostgreSQL
 
 Asegúrate de tener PostgreSQL corriendo y crea una base de datos:
@@ -133,7 +124,6 @@ CREATE DATABASE crm;
 # Salir de psql
 \q
 ```
-
 #### 5. Configurar Variables de Entorno
 
 Crea un archivo `.env` en la raíz del proyecto (opcional, el proyecto tiene valores por defecto):
@@ -145,8 +135,8 @@ DJANGO_SECRET_KEY=tu-secret-key-aqui
 DATABASE_URL=postgres://postgres:2323@localhost:5432/crm
 DJANGO_READ_DOT_ENV_FILE=True
 ```
-
 **Nota:** Si no creas el archivo `.env`, el proyecto usará valores por defecto:
+
 - `DATABASE_URL`: `postgres://postgres:2323@localhost:5432/crm`
 - `DJANGO_SECRET_KEY`: Se genera automáticamente para desarrollo local
 - `DJANGO_DEBUG`: `True` en modo local
@@ -156,13 +146,11 @@ DJANGO_READ_DOT_ENV_FILE=True
 ```bash
 python manage.py migrate
 ```
-
 #### 7. Crear un Superusuario (Opcional)
 
 ```bash
 python manage.py createsuperuser
 ```
-
 #### 8. Generar Datos de Prueba (Opcional)
 
 ```bash
@@ -176,13 +164,11 @@ python manage.py generate_mock_data \
     --activities 100 \
     --tasks 50
 ```
-
 #### 9. Ejecutar el Servidor de Desarrollo
 
 ```bash
 python manage.py runserver
 ```
-
 El servidor estará disponible en: `http://localhost:8000`
 
 ### Acceder a la Documentación de la API
@@ -193,6 +179,50 @@ Una vez que el servidor esté corriendo, puedes acceder a:
 - **ReDoc**: `http://localhost:8000/api/schema/redoc/`
 - **Schema JSON**: `http://localhost:8000/api/schema/`
 
+### Configurar Credenciales de APIs Externas
+
+#### Credenciales de WhatsApp Business API
+
+```bash
+# Crear credenciales de WhatsApp
+python manage.py create_whatsapp_credentials \
+    --version v18.0 \
+    --phone-number-id YOUR_PHONE_NUMBER_ID \
+    --access-token YOUR_ACCESS_TOKEN
+
+# Actualizar credenciales existentes
+python manage.py create_whatsapp_credentials \
+    --version v19.0 \
+    --phone-number-id YOUR_PHONE_NUMBER_ID \
+    --access-token YOUR_ACCESS_TOKEN \
+    --update
+
+# Crear y desactivar otras credenciales de WhatsApp
+python manage.py create_whatsapp_credentials \
+    --version v18.0 \
+    --phone-number-id YOUR_PHONE_NUMBER_ID \
+    --access-token YOUR_ACCESS_TOKEN \
+    --service-name "WhatsApp" \
+    --deactivate-others
+```
+#### Credenciales de Brevo (Email)
+
+```bash
+# Crear credenciales de Brevo
+python manage.py create_brevo_credentials \
+    --api-key YOUR_BREVO_API_KEY
+
+# Actualizar credenciales existentes
+python manage.py create_brevo_credentials \
+    --api-key YOUR_NEW_API_KEY \
+    --update
+
+# Crear con nombre personalizado y desactivar otras
+python manage.py create_brevo_credentials \
+    --api-key YOUR_BREVO_API_KEY \
+    --service-name "Brevo Principal" \
+    --deactivate-others
+```
 ### Comandos Útiles
 
 ```bash
@@ -217,19 +247,21 @@ python manage.py migrate
 # Recolectar archivos estáticos
 python manage.py collectstatic
 ```
-
 ### Solución de Problemas
 
 **Error de conexión a la base de datos:**
+
 - Verifica que PostgreSQL esté corriendo: `sudo service postgresql status`
 - Verifica las credenciales en `DATABASE_URL`
 - Asegúrate de que la base de datos `crm` exista
 
 **Error de dependencias:**
+
 - Asegúrate de estar en el entorno virtual activado
 - Reinstala las dependencias: `pip install -r requirements/local.txt --upgrade`
 
 **Error de migraciones:**
+
 - Si hay conflictos, puedes resetear las migraciones (¡cuidado en producción!):
   ```bash
   python manage.py migrate --run-syncdb
@@ -238,4 +270,5 @@ python manage.py collectstatic
 ## Deployment
 
 ### Producción:
+
 - Railway, más detalles próximamente

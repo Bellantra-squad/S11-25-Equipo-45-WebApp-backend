@@ -41,6 +41,7 @@ from crm.leads.models import (
     Task,
 )
 from crm.leads.services.email_service import EmailService
+from crm.leads.services.whatsapp_service import WhatsAppService
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -533,46 +534,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
     pagination_class = DefaultPageNumberPagination
 
     @extend_schema(
-        summary="Obtener o crear mensajes de conversación",
+        summary="Obtener mensajes de una conversación",
         description=(
-            "GET: Retorna todos los mensajes de una conversación específica, "
+            "Retorna todos los mensajes de una conversación específica, "
             "ordenados por fecha de envío. "
-            "POST: Crea un nuevo mensaje en la conversación. El campo 'conversation' "
-            "no debe incluirse en el request ya que se obtiene de la URL."
+            "Nota: Esta ruta solo acepta método GET, no se permite POST."
         ),
         tags=["conversations"],
-        request={
-            "application/json": {
-                "type": "object",
-                "properties": {
-                    "sender_type": {
-                        "type": "string",
-                        "description": "Tipo de remitente (user, contact)",
-                    },
-                    "sender_id": {
-                        "type": "integer",
-                        "description": "ID del remitente",
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Contenido del mensaje",
-                    },
-                    "message_type": {
-                        "type": "string",
-                        "description": "Tipo de mensaje",
-                    },
-                    "external_message_id": {
-                        "type": "string",
-                        "description": "ID externo del mensaje (opcional)",
-                    },
-                    "is_read": {
-                        "type": "boolean",
-                        "description": "Si el mensaje ha sido leído",
-                    },
-                },
-                "required": ["sender_type", "sender_id", "content"],
-            }
-        },
         parameters=[
             OpenApiParameter(
                 name="sender_type",
@@ -612,12 +580,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
         ],
         responses={
             200: MessageSerializer(many=True),
-            201: MessageSerializer,
-            400: {"description": "Datos inválidos"},
             404: {"description": "Conversación no encontrada"},
         },
     )
-    @action(detail=True, methods=["get", "post"])
+    @action(detail=True, methods=["get"])
     def messages(self, request, pk=None):
         """Get or create messages for a conversation."""
         conversation = self.get_object()
@@ -625,12 +591,120 @@ class ConversationViewSet(viewsets.ModelViewSet):
             messages = conversation.messages.all()
             serializer = MessageSerializer(messages, many=True)
             return Response(serializer.data)
-        elif request.method == "POST":
-            serializer = MessageSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(conversation=conversation)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Enviar mensaje de WhatsApp",
+        description=(
+            "Envía un mensaje de WhatsApp al contacto asociado a la conversación. "
+            "El mensaje solo se guarda en la base de datos si la API de WhatsApp "
+            "responde exitosamente. Requiere que la conversación tenga un contacto "
+            "con número de WhatsApp configurado y credenciales de API activas."
+        ),
+        tags=["conversations"],
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Contenido del mensaje a enviar",
+                    },
+                    "message_type": {
+                        "type": "string",
+                        "description": "Tipo de mensaje (default: text)",
+                        "enum": ["text", "image", "file", "audio", "video"],
+                        "default": "text",
+                    },
+                },
+                "required": ["content"],
+            }
+        },
+        responses={
+            200: OpenApiResponse(
+                response=MessageSerializer,
+                description="Mensaje enviado y guardado exitosamente",
+            ),
+            400: OpenApiResponse(
+                description="Datos inválidos o conversación sin contacto/número de WhatsApp",
+            ),
+            404: OpenApiResponse(
+                description="Conversación no encontrada",
+            ),
+            503: OpenApiResponse(
+                description="Error al comunicarse con la API de WhatsApp",
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Enviar mensaje de texto",
+                value={"content": "Hola, ¿cómo estás?", "message_type": "text"},
+                request_only=True,
+            ),
+        ],
+    )
+    @action(detail=True, methods=["post"])
+    def send_whatsapp(self, request, pk=None):
+        """Send a WhatsApp message to the conversation's contact."""
+        conversation = self.get_object()
+
+        # Validate conversation has a contact
+        if not conversation.contact:
+            return Response(
+                {"error": "La conversación no tiene un contacto asociado"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate contact has WhatsApp number
+        whatsapp_number = conversation.contact.whatsapp_number
+        if not whatsapp_number:
+            return Response(
+                {"error": "El contacto no tiene número de WhatsApp configurado"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate request data
+        content = request.data.get("content")
+        if not content:
+            return Response(
+                {"error": "El campo 'content' es requerido"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        message_type = request.data.get("message_type", "text")
+
+        # Try to send via WhatsApp API
+        try:
+            whatsapp_service = WhatsAppService()
+        except ValueError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        result = whatsapp_service.send_message(
+            to=whatsapp_number,
+            message=content,
+            message_type=message_type,
+        )
+
+        if not result.get("success"):
+            return Response(
+                {"error": result.get("error", "Error al enviar mensaje de WhatsApp")},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Save message only if WhatsApp API was successful
+        message = Message.objects.create(
+            conversation=conversation,
+            sender_type="user",
+            sender_id=str(request.user.id),
+            content=content,
+            message_type=message_type,
+            external_message_id=result.get("message_id", ""),
+        )
+
+        serializer = MessageSerializer(message)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class MessageViewSet(viewsets.ModelViewSet):

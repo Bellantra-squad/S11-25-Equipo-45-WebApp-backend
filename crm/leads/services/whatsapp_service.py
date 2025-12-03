@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 class WhatsAppService:
     """Service for interacting with WhatsApp Cloud API."""
 
-    BASE_URL = "https://graph.facebook.com/v18.0"
-
     def __init__(self, api_credential: Optional[ApiCredential] = None):
         """Initialize WhatsApp service with API credential."""
         self.api_credential = api_credential
@@ -37,6 +35,12 @@ class WhatsAppService:
         """Get phone number ID."""
         return self.api_credential.phone_number_id or ""
 
+    @property
+    def base_url(self) -> str:
+        """Get base URL with version from credentials."""
+        version = self.api_credential.additional_config.get("version", "v18.0")
+        return f"https://graph.facebook.com/{version}"
+
     def send_message(
         self, to: str, message: str, message_type: str = "text"
     ) -> Dict[str, any]:
@@ -51,7 +55,7 @@ class WhatsAppService:
         Returns:
             Response dictionary with message_id and status
         """
-        url = f"{self.BASE_URL}/{self.phone_number_id}/messages"
+        url = f"{self.base_url}/{self.phone_number_id}/messages"
 
         headers = {
             "Authorization": f"Bearer {self.access_token}",
