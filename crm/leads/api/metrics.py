@@ -1,18 +1,104 @@
 """Metrics dashboard API endpoints."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Count, Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from crm.leads.models import Contact, Conversation, Lead, LeadStatus, Message, Task
+from crm.leads.models import Contact, Lead, Message, Task
+
+
+def parse_date_range(
+    start_date: Optional[str], end_date: Optional[str]
+) -> Tuple[datetime, datetime]:
+    """
+    Parse date range from query parameters.
+
+    Args:
+        start_date: Start date string (YYYY-MM-DD format) or None
+        end_date: End date string (YYYY-MM-DD format) or None
+
+    Returns:
+        Tuple of (start_datetime, end_datetime) as timezone-aware datetimes
+
+    Behavior:
+        - If both are None: returns last 3 months range
+        - If both are the same date: returns that day (00:00 to 23:59)
+        - Otherwise: returns the specified range
+    """
+    now = timezone.now()
+
+    if not start_date and not end_date:
+        # Default: last 3 months
+        end_dt = now
+        start_dt = now - timedelta(days=90)
+        return start_dt, end_dt
+
+    # Parse dates
+    try:
+        if start_date:
+            start_dt = timezone.make_aware(
+                datetime.strptime(start_date, "%Y-%m-%d")
+            )
+        else:
+            start_dt = now - timedelta(days=90)
+
+        if end_date:
+            end_dt = timezone.make_aware(
+                datetime.strptime(end_date, "%Y-%m-%d")
+            )
+        else:
+            end_dt = now
+    except ValueError:
+        # Invalid date format, use defaults
+        start_dt = now - timedelta(days=90)
+        end_dt = now
+        return start_dt, end_dt
+
+    # If same date, set end to end of day
+    if start_date == end_date:
+        end_dt = end_dt.replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
+
+    # Ensure end_date includes the full day
+    if end_date and start_date != end_date:
+        end_dt = end_dt.replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
+
+    return start_dt, end_dt
+
+
+# Common OpenAPI parameters for date range
+DATE_RANGE_PARAMETERS = [
+    OpenApiParameter(
+        name="start_date",
+        type=str,
+        location=OpenApiParameter.QUERY,
+        description=(
+            "Fecha de inicio del rango (formato: YYYY-MM-DD). "
+            "Por defecto: hace 3 meses"
+        ),
+        required=False,
+    ),
+    OpenApiParameter(
+        name="end_date",
+        type=str,
+        location=OpenApiParameter.QUERY,
+        description=(
+            "Fecha de fin del rango (formato: YYYY-MM-DD). Por defecto: hoy. "
+            "Si es igual a start_date, filtra solo ese día"
+        ),
+        required=False,
+    ),
+]
 
 
 class MetricsViewSet(ViewSet):
@@ -23,12 +109,14 @@ class MetricsViewSet(ViewSet):
     @extend_schema(
         summary="Obtener métricas del dashboard principal",
         description=(
-            "Retorna un resumen completo de métricas para el dashboard principal. "
-            "Incluye contactos activos, mensajes enviados/recibidos, tasa de respuesta, "
-            "leads por estado, tasa de conversión, actividades recientes y tareas pendientes. "
-            "Los datos se calculan para los últimos 30 días por defecto."
+            "Retorna un resumen completo de métricas para el dashboard. "
+            "Incluye contactos activos, mensajes, tasa de respuesta, "
+            "leads por estado, conversión, actividades y tareas pendientes. "
+            "Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra ese día."
         ),
         tags=["metrics"],
+        parameters=DATE_RANGE_PARAMETERS,
         responses={
             200: {
                 "type": "object",
@@ -43,7 +131,8 @@ class MetricsViewSet(ViewSet):
                     "converted_leads": {"type": "integer"},
                     "recent_activities": {"type": "integer"},
                     "pending_tasks": {"type": "integer"},
-                    "period_days": {"type": "integer"},
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
                 },
             }
         },
@@ -51,42 +140,63 @@ class MetricsViewSet(ViewSet):
     @action(detail=False, methods=["get"])
     def dashboard(self, request) -> Response:
         """Get main dashboard metrics."""
-        now = timezone.now()
-        thirty_days_ago = now - timedelta(days=30)
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
 
         # Active contacts (contacts with recent activity)
         active_contacts = Contact.objects.filter(
-            Q(activities__created_at__gte=thirty_days_ago)
-            | Q(conversations__updated_at__gte=thirty_days_ago)
+            Q(
+                activities__created_at__gte=start_dt,
+                activities__created_at__lte=end_dt,
+            )
+            | Q(
+                conversations__updated_at__gte=start_dt,
+                conversations__updated_at__lte=end_dt,
+            )
         ).distinct().count()
 
-        # Messages sent in last 30 days
+        # Messages sent in period
         messages_sent = Message.objects.filter(
-            sender_type="user", sent_at__gte=thirty_days_ago
+            sender_type="user", sent_at__gte=start_dt, sent_at__lte=end_dt
         ).count()
 
         # Total messages (for response rate calculation)
-        total_messages = Message.objects.filter(sent_at__gte=thirty_days_ago).count()
+        total_messages = Message.objects.filter(
+            sent_at__gte=start_dt, sent_at__lte=end_dt
+        ).count()
         messages_received = total_messages - messages_sent
-        response_rate = (
-            (messages_received / messages_sent * 100) if messages_sent > 0 else 0
-        )
+        if messages_sent > 0:
+            response_rate = messages_received / messages_sent * 100
+        else:
+            response_rate = 0
 
-        # Leads by status
+        # Leads by status (filtered by created_at in period)
         leads_by_status = (
-            Lead.objects.values("status__name")
+            Lead.objects.filter(
+                created_at__gte=start_dt, created_at__lte=end_dt
+            )
+            .values("status__name")
             .annotate(count=Count("id"))
             .order_by("-count")
         )
 
-        # Conversion rate
-        total_leads = Lead.objects.count()
-        converted_leads = Lead.objects.filter(is_client=True).count()
-        conversion_rate = (converted_leads / total_leads * 100) if total_leads > 0 else 0
+        # Conversion rate (for leads created in period)
+        total_leads = Lead.objects.filter(
+            created_at__gte=start_dt, created_at__lte=end_dt
+        ).count()
+        converted_leads = Lead.objects.filter(
+            is_client=True, created_at__gte=start_dt, created_at__lte=end_dt
+        ).count()
+        if total_leads > 0:
+            conversion_rate = converted_leads / total_leads * 100
+        else:
+            conversion_rate = 0
 
         # Recent activity count
         recent_activities = Contact.objects.filter(
-            activities__created_at__gte=thirty_days_ago
+            activities__created_at__gte=start_dt,
+            activities__created_at__lte=end_dt,
         ).count()
 
         # Pending tasks
@@ -105,7 +215,8 @@ class MetricsViewSet(ViewSet):
             "converted_leads": converted_leads,
             "recent_activities": recent_activities,
             "pending_tasks": pending_tasks,
-            "period_days": 30,
+            "start_date": start_dt.strftime("%Y-%m-%d"),
+            "end_date": end_dt.strftime("%Y-%m-%d"),
         }
 
         return Response(data)
@@ -113,26 +224,23 @@ class MetricsViewSet(ViewSet):
     @extend_schema(
         summary="Obtener conteo de contactos activos",
         description=(
-            "Retorna el número de contactos activos en un período específico. "
-            "Un contacto se considera activo si tiene actividades o conversaciones "
-            "actualizadas en el período especificado."
+            "Retorna el número de contactos activos en un período. "
+            "Un contacto es activo si tiene actividades o conversaciones "
+            "actualizadas en el período. Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra solo ese día."
         ),
         tags=["metrics"],
-        parameters=[
-            OpenApiParameter(
-                name="days",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Número de días hacia atrás para calcular contactos activos (default: 30)",
-                required=False,
-            ),
-        ],
+        parameters=DATE_RANGE_PARAMETERS,
         responses={
             200: {
                 "type": "object",
                 "properties": {
-                    "count": {"type": "integer", "description": "Número de contactos activos"},
-                    "period_days": {"type": "integer", "description": "Período en días"},
+                    "count": {
+                        "type": "integer",
+                        "description": "Número de contactos activos",
+                    },
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
                 },
             }
         },
@@ -140,38 +248,47 @@ class MetricsViewSet(ViewSet):
     @action(detail=False, methods=["get"])
     def contacts_active(self, request) -> Response:
         """Get active contacts count."""
-        days = int(request.query_params.get("days", 30))
-        cutoff_date = timezone.now() - timedelta(days=days)
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
 
         active_contacts = Contact.objects.filter(
-            Q(activities__created_at__gte=cutoff_date)
-            | Q(conversations__updated_at__gte=cutoff_date)
+            Q(
+                activities__created_at__gte=start_dt,
+                activities__created_at__lte=end_dt,
+            )
+            | Q(
+                conversations__updated_at__gte=start_dt,
+                conversations__updated_at__lte=end_dt,
+            )
         ).distinct().count()
 
-        return Response({"count": active_contacts, "period_days": days})
+        return Response({
+            "count": active_contacts,
+            "start_date": start_dt.strftime("%Y-%m-%d"),
+            "end_date": end_dt.strftime("%Y-%m-%d"),
+        })
 
     @extend_schema(
         summary="Obtener conteo de mensajes enviados",
         description=(
-            "Retorna el número de mensajes enviados por usuarios en un período específico. "
-            "Incluye un desglose diario de mensajes enviados para análisis de tendencias."
+            "Retorna el número de mensajes enviados por usuarios en un "
+            "período. Incluye un desglose diario de mensajes enviados para "
+            "análisis de tendencias. Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra solo ese día."
         ),
         tags=["metrics"],
-        parameters=[
-            OpenApiParameter(
-                name="days",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Número de días hacia atrás para calcular mensajes enviados (default: 30)",
-                required=False,
-            ),
-        ],
+        parameters=DATE_RANGE_PARAMETERS,
         responses={
             200: {
                 "type": "object",
                 "properties": {
-                    "count": {"type": "integer", "description": "Total de mensajes enviados"},
-                    "period_days": {"type": "integer", "description": "Período en días"},
+                    "count": {
+                        "type": "integer",
+                        "description": "Total de mensajes enviados",
+                    },
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
                     "by_day": {
                         "type": "array",
                         "items": {
@@ -190,16 +307,23 @@ class MetricsViewSet(ViewSet):
     @action(detail=False, methods=["get"])
     def messages_sent(self, request) -> Response:
         """Get messages sent count with date range."""
-        days = int(request.query_params.get("days", 30))
-        cutoff_date = timezone.now() - timedelta(days=days)
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
 
         messages_sent = Message.objects.filter(
-            sender_type="user", sent_at__gte=cutoff_date
+            sender_type="user",
+            sent_at__gte=start_dt,
+            sent_at__lte=end_dt,
         ).count()
 
         # Group by day
         messages_by_day = (
-            Message.objects.filter(sender_type="user", sent_at__gte=cutoff_date)
+            Message.objects.filter(
+                sender_type="user",
+                sent_at__gte=start_dt,
+                sent_at__lte=end_dt,
+            )
             .extra(select={"day": "date(sent_at)"})
             .values("day")
             .annotate(count=Count("id"))
@@ -209,7 +333,8 @@ class MetricsViewSet(ViewSet):
         return Response(
             {
                 "count": messages_sent,
-                "period_days": days,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date": end_dt.strftime("%Y-%m-%d"),
                 "by_day": list(messages_by_day),
             }
         )
@@ -217,20 +342,14 @@ class MetricsViewSet(ViewSet):
     @extend_schema(
         summary="Calcular tasa de respuesta",
         description=(
-            "Calcula la tasa de respuesta de mensajes en un período específico. "
-            "La tasa de respuesta se calcula como: (mensajes recibidos / mensajes enviados) * 100. "
-            "Indica qué porcentaje de mensajes enviados recibieron respuesta."
+            "Calcula la tasa de respuesta de mensajes en un período. "
+            "Tasa = (recibidos / enviados) * 100. "
+            "Indica qué porcentaje de mensajes recibieron respuesta. "
+            "Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra ese día."
         ),
         tags=["metrics"],
-        parameters=[
-            OpenApiParameter(
-                name="days",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                description="Número de días hacia atrás para calcular la tasa (default: 30)",
-                required=False,
-            ),
-        ],
+        parameters=DATE_RANGE_PARAMETERS,
         responses={
             200: {
                 "type": "object",
@@ -239,12 +358,16 @@ class MetricsViewSet(ViewSet):
                         "type": "number",
                         "description": "Tasa de respuesta en porcentaje",
                     },
-                    "messages_sent": {"type": "integer", "description": "Total de mensajes enviados"},
+                    "messages_sent": {
+                        "type": "integer",
+                        "description": "Total de mensajes enviados",
+                    },
                     "messages_received": {
                         "type": "integer",
                         "description": "Total de mensajes recibidos",
                     },
-                    "period_days": {"type": "integer", "description": "Período en días"},
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
                 },
             }
         },
@@ -252,27 +375,34 @@ class MetricsViewSet(ViewSet):
     @action(detail=False, methods=["get"])
     def response_rate(self, request) -> Response:
         """Calculate response rate."""
-        days = int(request.query_params.get("days", 30))
-        cutoff_date = timezone.now() - timedelta(days=days)
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
 
         messages_sent = Message.objects.filter(
-            sender_type="user", sent_at__gte=cutoff_date
+            sender_type="user",
+            sent_at__gte=start_dt,
+            sent_at__lte=end_dt,
         ).count()
 
         messages_received = Message.objects.filter(
-            sender_type="contact", sent_at__gte=cutoff_date
+            sender_type="contact",
+            sent_at__gte=start_dt,
+            sent_at__lte=end_dt,
         ).count()
 
-        response_rate = (
-            (messages_received / messages_sent * 100) if messages_sent > 0 else 0
-        )
+        if messages_sent > 0:
+            response_rate = messages_received / messages_sent * 100
+        else:
+            response_rate = 0
 
         return Response(
             {
                 "response_rate": round(response_rate, 2),
                 "messages_sent": messages_sent,
                 "messages_received": messages_received,
-                "period_days": days,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date": end_dt.strftime("%Y-%m-%d"),
             }
         )
 
@@ -281,9 +411,12 @@ class MetricsViewSet(ViewSet):
         description=(
             "Retorna un resumen de leads agrupados por estado. "
             "Incluye el conteo y porcentaje de leads en cada estado, "
-            "junto con información del estado (nombre, color, ID)."
+            "junto con información del estado (nombre, color, ID). "
+            "Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra ese día."
         ),
         tags=["metrics"],
+        parameters=DATE_RANGE_PARAMETERS,
         responses={
             200: {
                 "type": "object",
@@ -301,7 +434,12 @@ class MetricsViewSet(ViewSet):
                             },
                         },
                     },
-                    "total": {"type": "integer", "description": "Total de leads"},
+                    "total": {
+                        "type": "integer",
+                        "description": "Total de leads",
+                    },
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
                 },
             }
         },
@@ -309,14 +447,23 @@ class MetricsViewSet(ViewSet):
     @action(detail=False, methods=["get"])
     def leads_by_status(self, request) -> Response:
         """Get leads grouped by status."""
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
+
         leads_by_status = (
-            Lead.objects.values("status__name", "status__color", "status__id")
+            Lead.objects.filter(
+                created_at__gte=start_dt, created_at__lte=end_dt
+            )
+            .values("status__name", "status__color", "status__id")
             .annotate(count=Count("id"))
             .order_by("-count")
         )
 
         # Add percentage
-        total = Lead.objects.count()
+        total = Lead.objects.filter(
+            created_at__gte=start_dt, created_at__lte=end_dt
+        ).count()
         result = []
         for item in leads_by_status:
             percentage = (item["count"] / total * 100) if total > 0 else 0
@@ -330,16 +477,24 @@ class MetricsViewSet(ViewSet):
                 }
             )
 
-        return Response({"leads_by_status": result, "total": total})
+        return Response({
+            "leads_by_status": result,
+            "total": total,
+            "start_date": start_dt.strftime("%Y-%m-%d"),
+            "end_date": end_dt.strftime("%Y-%m-%d"),
+        })
 
     @extend_schema(
         summary="Calcular tasa de conversión de leads",
         description=(
             "Calcula la tasa de conversión de leads a clientes. "
             "Incluye la tasa general y un desglose mensual de conversiones "
-            "para análisis de tendencias a lo largo del tiempo."
+            "para análisis de tendencias a lo largo del tiempo. "
+            "Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra ese día."
         ),
         tags=["metrics"],
+        parameters=DATE_RANGE_PARAMETERS,
         responses={
             200: {
                 "type": "object",
@@ -348,7 +503,10 @@ class MetricsViewSet(ViewSet):
                         "type": "number",
                         "description": "Tasa de conversión en porcentaje",
                     },
-                    "total_leads": {"type": "integer", "description": "Total de leads"},
+                    "total_leads": {
+                        "type": "integer",
+                        "description": "Total de leads",
+                    },
                     "converted_leads": {
                         "type": "integer",
                         "description": "Total de leads convertidos a clientes",
@@ -364,6 +522,8 @@ class MetricsViewSet(ViewSet):
                         },
                         "description": "Conversiones agrupadas por mes",
                     },
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
                 },
             }
         },
@@ -371,19 +531,39 @@ class MetricsViewSet(ViewSet):
     @action(detail=False, methods=["get"])
     def conversion_rate(self, request) -> Response:
         """Calculate lead to client conversion rate."""
-        total_leads = Lead.objects.count()
-        converted_leads = Lead.objects.filter(is_client=True).count()
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
 
-        # Conversion rate over time
+        total_leads = Lead.objects.filter(
+            created_at__gte=start_dt, created_at__lte=end_dt
+        ).count()
+        converted_leads = Lead.objects.filter(
+            is_client=True,
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        ).count()
+
+        # Conversion rate over time (within the date range)
         conversions_by_month = (
-            Lead.objects.filter(is_client=True, converted_to_client_at__isnull=False)
-            .extra(select={"month": "date_trunc('month', converted_to_client_at)"})
+            Lead.objects.filter(
+                is_client=True,
+                converted_to_client_at__isnull=False,
+                converted_to_client_at__gte=start_dt,
+                converted_to_client_at__lte=end_dt,
+            )
+            .extra(select={
+                "month": "date_trunc('month', converted_to_client_at)"
+            })
             .values("month")
             .annotate(count=Count("id"))
             .order_by("month")
         )
 
-        conversion_rate = (converted_leads / total_leads * 100) if total_leads > 0 else 0
+        if total_leads > 0:
+            conversion_rate = converted_leads / total_leads * 100
+        else:
+            conversion_rate = 0
 
         return Response(
             {
@@ -391,6 +571,7 @@ class MetricsViewSet(ViewSet):
                 "total_leads": total_leads,
                 "converted_leads": converted_leads,
                 "conversions_by_month": list(conversions_by_month),
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date": end_dt.strftime("%Y-%m-%d"),
             }
         )
-
