@@ -5,6 +5,8 @@ from rest_framework import serializers
 from crm.leads.models import (
     Activity,
     ApiCredential,
+    Campaign,
+    CampaignRecipient,
     Category,
     Contact,
     ContactTag,
@@ -446,4 +448,191 @@ class ApiCredentialSerializer(serializers.ModelSerializer[ApiCredential]):
             "access_token": {"write_only": True},
             "refresh_token": {"write_only": True},
         }
+
+
+class CampaignRecipientSerializer(serializers.ModelSerializer[CampaignRecipient]):
+    """Campaign recipient serializer."""
+
+    contact = ContactBasicSerializer(read_only=True)
+    contact_id = serializers.PrimaryKeyRelatedField(
+        queryset=Contact.objects.all(), source="contact", write_only=True
+    )
+
+    class Meta:
+        model = CampaignRecipient
+        fields = [
+            "id",
+            "campaign",
+            "contact",
+            "contact_id",
+            "status",
+            "external_message_id",
+            "error_message",
+            "sent_at",
+            "delivered_at",
+            "read_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "campaign",
+            "external_message_id",
+            "sent_at",
+            "delivered_at",
+            "read_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class CampaignListSerializer(serializers.ModelSerializer[Campaign]):
+    """Campaign serializer for list views (optimized)."""
+
+    created_by = UserBasicSerializer(read_only=True)
+    total_recipients = serializers.IntegerField(read_only=True)
+    sent_count = serializers.IntegerField(read_only=True)
+    delivered_count = serializers.IntegerField(read_only=True)
+    read_count = serializers.IntegerField(read_only=True)
+    failed_count = serializers.IntegerField(read_only=True)
+    delivery_rate = serializers.FloatField(read_only=True)
+    read_rate = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = Campaign
+        fields = [
+            "id",
+            "name",
+            "description",
+            "channel",
+            "status",
+            "scheduled_at",
+            "started_at",
+            "completed_at",
+            "created_by",
+            "total_recipients",
+            "sent_count",
+            "delivered_count",
+            "read_count",
+            "failed_count",
+            "delivery_rate",
+            "read_rate",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class CampaignSerializer(serializers.ModelSerializer[Campaign]):
+    """Full campaign serializer with all fields."""
+
+    created_by = UserBasicSerializer(read_only=True)
+    total_recipients = serializers.IntegerField(read_only=True)
+    sent_count = serializers.IntegerField(read_only=True)
+    delivered_count = serializers.IntegerField(read_only=True)
+    read_count = serializers.IntegerField(read_only=True)
+    failed_count = serializers.IntegerField(read_only=True)
+    pending_count = serializers.IntegerField(read_only=True)
+    delivery_rate = serializers.FloatField(read_only=True)
+    read_rate = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = Campaign
+        fields = [
+            "id",
+            "name",
+            "description",
+            "channel",
+            "status",
+            "message_content",
+            "whatsapp_template_name",
+            "whatsapp_template_params",
+            "whatsapp_template_language",
+            "email_subject",
+            "scheduled_at",
+            "started_at",
+            "completed_at",
+            "filter_config",
+            "created_by",
+            "total_recipients",
+            "sent_count",
+            "delivered_count",
+            "read_count",
+            "failed_count",
+            "pending_count",
+            "delivery_rate",
+            "read_rate",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "started_at",
+            "completed_at",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class CampaignCreateSerializer(serializers.ModelSerializer[Campaign]):
+    """Serializer for creating campaigns."""
+
+    class Meta:
+        model = Campaign
+        fields = [
+            "id",
+            "name",
+            "description",
+            "channel",
+            "message_content",
+            "whatsapp_template_name",
+            "whatsapp_template_params",
+            "whatsapp_template_language",
+            "email_subject",
+            "scheduled_at",
+            "filter_config",
+        ]
+        read_only_fields = ["id"]
+
+    def validate(self, data):
+        """Validate campaign data based on channel."""
+        channel = data.get("channel")
+        message_content = data.get("message_content", "")
+        whatsapp_template_name = data.get("whatsapp_template_name", "")
+        email_subject = data.get("email_subject", "")
+
+        if channel == "whatsapp":
+            # WhatsApp requires either template or message content
+            if not message_content and not whatsapp_template_name:
+                raise serializers.ValidationError(
+                    {"message_content": "Se requiere contenido del mensaje o nombre de plantilla de WhatsApp."}
+                )
+
+        elif channel == "email":
+            # Email requires subject and message content
+            if not email_subject:
+                raise serializers.ValidationError(
+                    {"email_subject": "Se requiere el asunto del email."}
+                )
+            if not message_content:
+                raise serializers.ValidationError(
+                    {"message_content": "Se requiere el contenido del mensaje."}
+                )
+
+        return data
+
+    def create(self, validated_data):
+        """Create campaign with creator."""
+        validated_data["created_by"] = self.context["request"].user
+        validated_data["status"] = "draft"
+        return super().create(validated_data)
+
+
+class CampaignPreviewSerializer(serializers.Serializer):
+    """Serializer for previewing campaign recipients."""
+
+    filter_config = serializers.JSONField(required=False, default=dict)
+    channel = serializers.ChoiceField(choices=["whatsapp", "email"])
 

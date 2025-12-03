@@ -2,6 +2,7 @@
 
 from crm.leads.models.activity import Activity
 from crm.leads.models.api_credential import ApiCredential
+from crm.leads.models.campaign import Campaign, CampaignRecipient
 from crm.leads.models.contact import Contact, ContactTag
 from crm.leads.models.conversation import Conversation, Message
 from crm.leads.models.filter import SavedFilter
@@ -32,4 +33,7 @@ __all__ = [
     "SavedFilter",
     # API models
     "ApiCredential",
+    # Campaign models
+    "Campaign",
+    "CampaignRecipient",
 ]

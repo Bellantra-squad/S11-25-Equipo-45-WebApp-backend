@@ -14,6 +14,11 @@ from crm.core.utils.pagination import DefaultPageNumberPagination
 from crm.leads.api.serializers import (
     ActivitySerializer,
     ApiCredentialSerializer,
+    CampaignCreateSerializer,
+    CampaignListSerializer,
+    CampaignPreviewSerializer,
+    CampaignRecipientSerializer,
+    CampaignSerializer,
     CategorySerializer,
     ContactSerializer,
     ConversationSerializer,
@@ -29,6 +34,8 @@ from crm.leads.api.serializers import (
 from crm.leads.models import (
     Activity,
     ApiCredential,
+    Campaign,
+    CampaignRecipient,
     Category,
     Contact,
     Conversation,
@@ -40,6 +47,7 @@ from crm.leads.models import (
     Tag,
     Task,
 )
+from crm.leads.services.campaign_service import CampaignService
 from crm.leads.services.email_service import EmailService
 from crm.leads.services.whatsapp_service import WhatsAppService
 
@@ -964,5 +972,427 @@ class ApiCredentialViewSet(viewsets.ModelViewSet):
                     "details": result.get("error"),
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class CampaignViewSet(viewsets.ModelViewSet):
+    """ViewSet for Campaign model with mass messaging actions."""
+
+    queryset = Campaign.objects.select_related("created_by").prefetch_related(
+        "recipients"
+    )
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["channel", "status", "created_by"]
+    search_fields = ["name", "description"]
+    ordering_fields = ["created_at", "updated_at", "scheduled_at", "name"]
+    ordering = ["-created_at"]
+    pagination_class = DefaultPageNumberPagination
+
+    def get_serializer_class(self):
+        """Return appropriate serializer class based on action."""
+        if self.action == "list":
+            return CampaignListSerializer
+        elif self.action == "create":
+            return CampaignCreateSerializer
+        elif self.action == "preview_recipients":
+            return CampaignPreviewSerializer
+        elif self.action == "recipients":
+            return CampaignRecipientSerializer
+        return CampaignSerializer
+
+    @extend_schema(
+        summary="Listar campañas",
+        description=(
+            "Retorna una lista paginada de campañas con métricas básicas. "
+            "Soporta filtros por canal, estado y creador."
+        ),
+        tags=["campaigns"],
+    )
+    def list(self, request, *args, **kwargs):
+        """List campaigns with metrics."""
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Crear campaña",
+        description=(
+            "Crea una nueva campaña en estado 'draft'. "
+            "Para WhatsApp se puede usar texto libre o nombre de plantilla aprobada. "
+            "Para Email se requiere asunto y contenido."
+        ),
+        tags=["campaigns"],
+    )
+    def create(self, request, *args, **kwargs):
+        """Create a new campaign."""
+        return super().create(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Obtener detalle de campaña",
+        description="Retorna todos los detalles de una campaña incluyendo métricas completas.",
+        tags=["campaigns"],
+    )
+    def retrieve(self, request, *args, **kwargs):
+        """Retrieve campaign details."""
+        return super().retrieve(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Actualizar campaña",
+        description=(
+            "Actualiza una campaña. Solo se puede actualizar si está en estado 'draft'. "
+            "Para modificar campañas en otros estados, primero debe cancelarse."
+        ),
+        tags=["campaigns"],
+    )
+    def update(self, request, *args, **kwargs):
+        """Update a campaign."""
+        campaign = self.get_object()
+        if campaign.status != "draft":
+            return Response(
+                {"error": "Solo se pueden editar campañas en estado 'draft'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().update(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Eliminar campaña",
+        description="Elimina una campaña. Solo se pueden eliminar campañas en estado 'draft' o 'cancelled'.",
+        tags=["campaigns"],
+    )
+    def destroy(self, request, *args, **kwargs):
+        """Delete a campaign."""
+        campaign = self.get_object()
+        if campaign.status not in ["draft", "cancelled"]:
+            return Response(
+                {"error": "Solo se pueden eliminar campañas en estado 'draft' o 'cancelled'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Vista previa de destinatarios",
+        description=(
+            "Muestra una vista previa de los contactos que recibirían la campaña "
+            "basándose en la configuración de filtros. Limitado a 100 contactos."
+        ),
+        tags=["campaigns"],
+        request=CampaignPreviewSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_count": {"type": "integer"},
+                    "preview": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "first_name": {"type": "string"},
+                                "last_name": {"type": "string"},
+                                "email": {"type": "string"},
+                                "whatsapp_number": {"type": "string"},
+                                "lead_id": {"type": "integer"},
+                                "lead_name": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="preview-recipients")
+    def preview_recipients(self, request):
+        """Preview contacts that would receive a campaign."""
+        serializer = CampaignPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        campaign_service = CampaignService()
+        preview = campaign_service.preview_recipients(
+            filter_config=serializer.validated_data.get("filter_config", {}),
+            channel=serializer.validated_data["channel"],
+        )
+
+        # Get total count
+        config = serializer.validated_data.get("filter_config", {}).copy()
+        if serializer.validated_data["channel"] == "whatsapp":
+            config["has_whatsapp"] = True
+        elif serializer.validated_data["channel"] == "email":
+            config["has_email"] = True
+
+        total = len(campaign_service.get_filtered_contacts(config))
+
+        return Response(
+            {
+                "total_count": total,
+                "preview": preview,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        summary="Ejecutar campaña",
+        description=(
+            "Inicia la ejecución de una campaña. La campaña debe estar en estado "
+            "'draft', 'scheduled' o 'paused'. Los mensajes se envían a todos los "
+            "destinatarios pendientes."
+        ),
+        tags=["campaigns"],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "sent_count": {"type": "integer"},
+                    "failed_count": {"type": "integer"},
+                    "status": {"type": "string"},
+                },
+            },
+            400: {"description": "La campaña no puede ejecutarse en su estado actual"},
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def execute(self, request, pk=None):
+        """Execute a campaign."""
+        campaign = self.get_object()
+        campaign_service = CampaignService()
+
+        # Create recipients if not exist
+        if campaign.recipients.count() == 0:
+            recipients_created = campaign_service.create_recipients(campaign)
+            if recipients_created == 0:
+                return Response(
+                    {"error": "No se encontraron destinatarios para esta campaña"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        result = campaign_service.execute_campaign(campaign)
+
+        if result.get("success"):
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Pausar campaña",
+        description=(
+            "Pausa una campaña en ejecución. Los mensajes pendientes no se enviarán "
+            "hasta que se reanude la campaña."
+        ),
+        tags=["campaigns"],
+        responses={
+            200: {"type": "object", "properties": {"success": {"type": "boolean"}, "status": {"type": "string"}}},
+            400: {"description": "La campaña no está en ejecución"},
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def pause(self, request, pk=None):
+        """Pause a running campaign."""
+        campaign = self.get_object()
+        campaign_service = CampaignService()
+        result = campaign_service.pause_campaign(campaign)
+
+        if result.get("success"):
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Reanudar campaña",
+        description="Reanuda una campaña pausada y continúa enviando mensajes pendientes.",
+        tags=["campaigns"],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "sent_count": {"type": "integer"},
+                    "failed_count": {"type": "integer"},
+                    "status": {"type": "string"},
+                },
+            },
+            400: {"description": "La campaña no está pausada"},
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def resume(self, request, pk=None):
+        """Resume a paused campaign."""
+        campaign = self.get_object()
+        campaign_service = CampaignService()
+        result = campaign_service.resume_campaign(campaign)
+
+        if result.get("success"):
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Cancelar campaña",
+        description=(
+            "Cancela una campaña. Los mensajes pendientes no se enviarán. "
+            "Esta acción no se puede deshacer."
+        ),
+        tags=["campaigns"],
+        responses={
+            200: {"type": "object", "properties": {"success": {"type": "boolean"}, "status": {"type": "string"}}},
+            400: {"description": "La campaña ya está completada o cancelada"},
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Cancel a campaign."""
+        campaign = self.get_object()
+        campaign_service = CampaignService()
+        result = campaign_service.cancel_campaign(campaign)
+
+        if result.get("success"):
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Listar destinatarios de campaña",
+        description=(
+            "Retorna la lista paginada de destinatarios de una campaña con su estado de envío."
+        ),
+        tags=["campaigns"],
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filtrar por estado (pending, sent, delivered, read, failed)",
+                required=False,
+            ),
+        ],
+        responses={200: CampaignRecipientSerializer(many=True)},
+    )
+    @action(detail=True, methods=["get"])
+    def recipients(self, request, pk=None):
+        """List campaign recipients."""
+        campaign = self.get_object()
+        recipients = campaign.recipients.select_related("contact", "contact__lead")
+
+        # Filter by status if provided
+        recipient_status = request.query_params.get("status")
+        if recipient_status:
+            recipients = recipients.filter(status=recipient_status)
+
+        # Paginate
+        page = self.paginate_queryset(recipients)
+        if page is not None:
+            serializer = CampaignRecipientSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = CampaignRecipientSerializer(recipients, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Obtener métricas de campaña",
+        description=(
+            "Retorna métricas detalladas de una campaña incluyendo tasas de entrega, "
+            "lectura y distribución horaria de envíos."
+        ),
+        tags=["campaigns"],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "campaign_id": {"type": "integer"},
+                    "campaign_name": {"type": "string"},
+                    "channel": {"type": "string"},
+                    "status": {"type": "string"},
+                    "total_recipients": {"type": "integer"},
+                    "pending": {"type": "integer"},
+                    "sent": {"type": "integer"},
+                    "delivered": {"type": "integer"},
+                    "read": {"type": "integer"},
+                    "failed": {"type": "integer"},
+                    "delivery_rate": {"type": "number"},
+                    "read_rate": {"type": "number"},
+                    "failure_rate": {"type": "number"},
+                    "started_at": {"type": "string", "format": "date-time"},
+                    "completed_at": {"type": "string", "format": "date-time"},
+                    "hourly_distribution": {"type": "array"},
+                },
+            }
+        },
+    )
+    @action(detail=True, methods=["get"])
+    def metrics(self, request, pk=None):
+        """Get campaign metrics."""
+        campaign = self.get_object()
+        campaign_service = CampaignService()
+        metrics = campaign_service.get_campaign_metrics(campaign)
+        return Response(metrics, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Programar campaña",
+        description=(
+            "Programa una campaña para envío futuro. La campaña debe estar en estado 'draft'."
+        ),
+        tags=["campaigns"],
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "scheduled_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Fecha y hora de envío programado (ISO 8601)",
+                    },
+                },
+                "required": ["scheduled_at"],
+            }
+        },
+        responses={
+            200: CampaignSerializer,
+            400: {"description": "La campaña no puede ser programada"},
+        },
+    )
+    @action(detail=True, methods=["post"])
+    def schedule(self, request, pk=None):
+        """Schedule a campaign for future execution."""
+        campaign = self.get_object()
+
+        if campaign.status != "draft":
+            return Response(
+                {"error": "Solo se pueden programar campañas en estado 'draft'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        scheduled_at = request.data.get("scheduled_at")
+        if not scheduled_at:
+            return Response(
+                {"error": "Se requiere la fecha de programación (scheduled_at)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from django.utils.dateparse import parse_datetime
+            scheduled_datetime = parse_datetime(scheduled_at)
+            if not scheduled_datetime:
+                raise ValueError("Invalid datetime format")
+
+            if scheduled_datetime <= timezone.now():
+                return Response(
+                    {"error": "La fecha de programación debe ser en el futuro"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            campaign.scheduled_at = scheduled_datetime
+            campaign.status = "scheduled"
+            campaign.save(update_fields=["scheduled_at", "status", "updated_at"])
+
+            # Create recipients
+            campaign_service = CampaignService()
+            campaign_service.create_recipients(campaign)
+
+            serializer = CampaignSerializer(campaign)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except (ValueError, TypeError) as e:
+            return Response(
+                {"error": f"Formato de fecha inválido: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 

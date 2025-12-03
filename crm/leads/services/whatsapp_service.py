@@ -106,6 +106,112 @@ class WhatsAppService:
             "status": "delivered",  # delivered, read, failed
         }
 
+    def send_template_message(
+        self,
+        to: str,
+        template_name: str,
+        language_code: str = "es",
+        parameters: Optional[Dict[str, any]] = None,
+    ) -> Dict[str, any]:
+        """
+        Send a WhatsApp template message (approved by Meta).
+
+        Template messages can be sent to any user, even outside the 24h window.
+        Templates must be pre-approved by Meta.
+
+        Args:
+            to: Recipient phone number (with country code, no +)
+            template_name: Name of the approved template
+            language_code: Language code (e.g., 'es', 'en')
+            parameters: Dictionary with template parameters
+                - header: List of parameters for header
+                - body: List of parameters for body
+                - buttons: List of parameters for buttons
+
+        Returns:
+            Response dictionary with message_id and status
+        """
+        url = f"{self.base_url}/{self.phone_number_id}/messages"
+
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+
+        # Build template payload
+        template_payload = {
+            "name": template_name,
+            "language": {"code": language_code},
+        }
+
+        # Add components if parameters are provided
+        if parameters:
+            components = []
+
+            # Header parameters
+            if parameters.get("header"):
+                header_params = [
+                    {"type": "text", "text": str(p)}
+                    for p in parameters["header"]
+                ]
+                components.append({
+                    "type": "header",
+                    "parameters": header_params,
+                })
+
+            # Body parameters
+            if parameters.get("body"):
+                body_params = [
+                    {"type": "text", "text": str(p)}
+                    for p in parameters["body"]
+                ]
+                components.append({
+                    "type": "body",
+                    "parameters": body_params,
+                })
+
+            # Button parameters (for URL buttons with dynamic suffix)
+            if parameters.get("buttons"):
+                for idx, button_param in enumerate(parameters["buttons"]):
+                    components.append({
+                        "type": "button",
+                        "sub_type": "url",
+                        "index": idx,
+                        "parameters": [{"type": "text", "text": str(button_param)}],
+                    })
+
+            if components:
+                template_payload["components"] = components
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": template_payload,
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+            message_id = data.get("messages", [{}])[0].get("id", "")
+            logger.info(
+                f"WhatsApp template message '{template_name}' sent to {to}: {message_id}"
+            )
+
+            return {
+                "success": True,
+                "message_id": message_id,
+                "data": data,
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error sending WhatsApp template message: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
     def verify_webhook(self, verify_token: str, challenge: str) -> Optional[str]:
         """
         Verify webhook subscription.

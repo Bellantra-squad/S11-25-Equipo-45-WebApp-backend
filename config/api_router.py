@@ -7,6 +7,7 @@ from crm.leads.api.metrics import MetricsViewSet
 from crm.leads.api.views import (
     ActivityViewSet,
     ApiCredentialViewSet,
+    CampaignViewSet,
     CategoryViewSet,
     ContactViewSet,
     ConversationViewSet,
@@ -37,6 +38,9 @@ router.register("messages", MessageViewSet, basename="message")
 router.register("email-templates", EmailTemplateViewSet, basename="emailtemplate")
 router.register("saved-filters", SavedFilterViewSet, basename="savedfilter")
 router.register("api-credentials", ApiCredentialViewSet, basename="apicredential")
+
+# Campaign endpoints
+router.register("campaigns", CampaignViewSet, basename="campaign")
 
 # Metrics endpoints
 router.register("metrics", MetricsViewSet, basename="metrics")

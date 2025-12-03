@@ -5,6 +5,8 @@ from django.contrib import admin
 from crm.leads.models import (
     Activity,
     ApiCredential,
+    Campaign,
+    CampaignRecipient,
     Category,
     Contact,
     ContactTag,
@@ -315,3 +317,95 @@ class ApiCredentialAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+class CampaignRecipientInline(admin.TabularInline):
+    """Inline admin for CampaignRecipient model."""
+
+    model = CampaignRecipient
+    extra = 0
+    fields = ["contact", "status", "sent_at", "delivered_at", "read_at", "error_message"]
+    readonly_fields = ["sent_at", "delivered_at", "read_at"]
+    raw_id_fields = ["contact"]
+
+
+@admin.register(Campaign)
+class CampaignAdmin(admin.ModelAdmin):
+    """Admin for Campaign model."""
+
+    list_display = [
+        "name",
+        "channel",
+        "status",
+        "total_recipients",
+        "sent_count",
+        "delivered_count",
+        "read_count",
+        "failed_count",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["channel", "status", "created_by", "created_at"]
+    search_fields = ["name", "description", "message_content"]
+    ordering = ["-created_at"]
+    readonly_fields = [
+        "status",
+        "started_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
+    ]
+    inlines = [CampaignRecipientInline]
+
+    fieldsets = (
+        ("Basic Information", {"fields": ("name", "description", "channel", "status")}),
+        (
+            "Message Content",
+            {
+                "fields": (
+                    "message_content",
+                    "email_subject",
+                    "whatsapp_template_name",
+                    "whatsapp_template_params",
+                    "whatsapp_template_language",
+                ),
+            },
+        ),
+        ("Scheduling", {"fields": ("scheduled_at", "started_at", "completed_at")}),
+        ("Filters", {"fields": ("filter_config",)}),
+        ("Metadata", {"fields": ("created_by", "created_at", "updated_at")}),
+    )
+
+    def get_queryset(self, request):
+        """Optimize queryset."""
+        return super().get_queryset(request).select_related("created_by")
+
+
+@admin.register(CampaignRecipient)
+class CampaignRecipientAdmin(admin.ModelAdmin):
+    """Admin for CampaignRecipient model."""
+
+    list_display = [
+        "campaign",
+        "contact",
+        "status",
+        "sent_at",
+        "delivered_at",
+        "read_at",
+        "created_at",
+    ]
+    list_filter = ["status", "campaign", "created_at"]
+    search_fields = [
+        "campaign__name",
+        "contact__first_name",
+        "contact__last_name",
+        "contact__email",
+        "external_message_id",
+    ]
+    ordering = ["-created_at"]
+    readonly_fields = ["sent_at", "delivered_at", "read_at", "created_at", "updated_at"]
+    raw_id_fields = ["campaign", "contact"]
+
+    def get_queryset(self, request):
+        """Optimize queryset."""
+        return super().get_queryset(request).select_related("campaign", "contact")

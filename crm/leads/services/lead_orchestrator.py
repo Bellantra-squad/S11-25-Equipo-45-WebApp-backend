@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from crm.leads.models import Activity, Contact, Conversation, Lead, Message
 from crm.leads.services.automation_service import AutomationService
+from crm.leads.services.campaign_service import CampaignService
 from crm.leads.services.email_service import EmailService
 from crm.leads.services.whatsapp_service import WhatsAppService
 
@@ -22,6 +23,7 @@ class LeadOrchestrator:
         self.whatsapp_service = WhatsAppService()
         self.email_service = EmailService()
         self.automation_service = AutomationService()
+        self.campaign_service = CampaignService()
 
     def process_whatsapp_webhook(self, webhook_data: Dict) -> Dict[str, any]:
         """
@@ -106,6 +108,121 @@ class LeadOrchestrator:
 
         except Exception as e:
             logger.exception(f"Error processing WhatsApp webhook: {e}")
+            return {"success": False, "error": str(e)}
+
+    def process_whatsapp_status_webhook(
+        self, webhook_data: Dict
+    ) -> Dict[str, any]:
+        """
+        Process WhatsApp message status updates (delivered, read, failed).
+
+        Updates both Message records and CampaignRecipient records.
+        """
+        try:
+            statuses = self._parse_whatsapp_statuses(webhook_data)
+            if not statuses:
+                return {"success": False, "error": "No status updates found"}
+
+            updated_count = 0
+            for status_update in statuses:
+                message_id = status_update.get("id", "")
+                status = status_update.get("status", "")
+
+                if not message_id or not status:
+                    continue
+
+                # Update Message record
+                message = Message.objects.filter(
+                    external_message_id=message_id
+                ).first()
+
+                if message:
+                    now = timezone.now()
+                    if status == "delivered" and not message.delivered_at:
+                        message.delivered_at = now
+                        message.save(update_fields=["delivered_at"])
+                    elif status == "read" and not message.read_at:
+                        message.read_at = now
+                        message.is_read = True
+                        if not message.delivered_at:
+                            message.delivered_at = now
+                        message.save(
+                            update_fields=["read_at", "is_read", "delivered_at"]
+                        )
+
+                # Update CampaignRecipient record
+                self.campaign_service.update_recipient_status(
+                    external_message_id=message_id,
+                    new_status=status,
+                )
+                updated_count += 1
+
+            logger.info(f"Processed {updated_count} WhatsApp status updates")
+            return {"success": True, "updated_count": updated_count}
+
+        except Exception as e:
+            logger.exception(f"Error processing WhatsApp status webhook: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _parse_whatsapp_statuses(self, webhook_data: Dict) -> list:
+        """Parse WhatsApp status updates from webhook data."""
+        try:
+            entry = webhook_data.get("entry", [{}])[0]
+            changes = entry.get("changes", [{}])[0]
+            value = changes.get("value", {})
+            statuses = value.get("statuses", [])
+            return statuses
+        except (KeyError, IndexError, TypeError):
+            return []
+
+    def process_brevo_status_webhook(
+        self, webhook_data: Dict
+    ) -> Dict[str, any]:
+        """
+        Process Brevo email status updates (delivered, opened, clicked, etc.).
+
+        Updates CampaignRecipient records.
+        """
+        try:
+            event = webhook_data.get("event", "")
+            message_id = webhook_data.get("message-id", "")
+
+            if not message_id:
+                return {"success": False, "error": "No message ID found"}
+
+            # Map Brevo events to internal status
+            status_map = {
+                "delivered": "delivered",
+                "opened": "read",
+                "click": "read",
+                "soft_bounce": "failed",
+                "hard_bounce": "failed",
+                "invalid_email": "failed",
+                "blocked": "failed",
+                "spam": "failed",
+                "unsubscribed": "delivered",
+            }
+
+            internal_status = status_map.get(event)
+            if not internal_status:
+                return {"success": False, "error": f"Unknown event: {event}"}
+
+            # Update CampaignRecipient record
+            updated = self.campaign_service.update_recipient_status(
+                external_message_id=message_id,
+                new_status=internal_status,
+            )
+
+            if updated:
+                logger.info(
+                    f"Updated campaign recipient {message_id} to {internal_status}"
+                )
+                return {"success": True, "status": internal_status}
+            else:
+                return {"success": False, "error": "Recipient not found"}
+
+        except Exception as e:
+            logger.exception(f"Error processing Brevo status webhook: {e}")
             return {"success": False, "error": str(e)}
 
     def process_email_webhook(self, webhook_data: Dict) -> Dict[str, any]:

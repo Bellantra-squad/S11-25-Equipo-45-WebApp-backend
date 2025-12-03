@@ -69,11 +69,20 @@ class WhatsAppWebhookView(View):
 
             # Process webhook
             orchestrator = LeadOrchestrator()
-            result = orchestrator.process_whatsapp_webhook(body)
+
+            # Check if this is a status update or a new message
+            is_status_update = self._is_status_update(body)
+
+            if is_status_update:
+                result = orchestrator.process_whatsapp_status_webhook(body)
+            else:
+                result = orchestrator.process_whatsapp_webhook(body)
 
             if result.get("success"):
                 return JsonResponse({"status": "ok"}, status=200)
-            return JsonResponse({"error": result.get("error", "Unknown error")}, status=400)
+            return JsonResponse(
+                {"error": result.get("error", "Unknown error")}, status=400
+            )
 
         except json.JSONDecodeError:
             logger.error("Invalid JSON in WhatsApp webhook")
@@ -85,6 +94,17 @@ class WhatsAppWebhookView(View):
     def get(self, request: HttpRequest) -> HttpResponse:
         """Handle webhook verification."""
         return self.post(request)
+
+    def _is_status_update(self, webhook_data: dict) -> bool:
+        """Check if the webhook is a status update vs a new message."""
+        try:
+            entry = webhook_data.get("entry", [{}])[0]
+            changes = entry.get("changes", [{}])[0]
+            value = changes.get("value", {})
+            # Status updates have 'statuses' key, messages have 'messages' key
+            return bool(value.get("statuses")) and not value.get("messages")
+        except (KeyError, IndexError, TypeError):
+            return False
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -110,11 +130,31 @@ class EmailWebhookView(View):
 
             # Process webhook
             orchestrator = LeadOrchestrator()
-            result = orchestrator.process_email_webhook(body)
+
+            # Check if this is a status update or an inbound email
+            event_type = body.get("event", "")
+            is_status_event = event_type in [
+                "delivered",
+                "opened",
+                "click",
+                "soft_bounce",
+                "hard_bounce",
+                "invalid_email",
+                "blocked",
+                "spam",
+                "unsubscribed",
+            ]
+
+            if is_status_event:
+                result = orchestrator.process_brevo_status_webhook(body)
+            else:
+                result = orchestrator.process_email_webhook(body)
 
             if result.get("success"):
                 return JsonResponse({"status": "ok"}, status=200)
-            return JsonResponse({"error": result.get("error", "Unknown error")}, status=400)
+            return JsonResponse(
+                {"error": result.get("error", "Unknown error")}, status=400
+            )
 
         except json.JSONDecodeError:
             logger.error("Invalid JSON in email webhook")

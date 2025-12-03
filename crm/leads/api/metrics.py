@@ -11,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from crm.leads.models import Contact, Lead, Message, Task
+from crm.leads.models import Campaign, CampaignRecipient, Contact, Lead, Message, Task
 
 
 def parse_date_range(
@@ -573,5 +573,243 @@ class MetricsViewSet(ViewSet):
                 "conversions_by_month": list(conversions_by_month),
                 "start_date": start_dt.strftime("%Y-%m-%d"),
                 "end_date": end_dt.strftime("%Y-%m-%d"),
+            }
+        )
+
+    @extend_schema(
+        summary="Obtener métricas generales de campañas",
+        description=(
+            "Retorna métricas agregadas de todas las campañas en un período. "
+            "Incluye totales por estado, canal, y tasas de entrega/lectura. "
+            "Por defecto: últimos 3 meses. "
+            "Si start_date=end_date, filtra ese día."
+        ),
+        tags=["metrics"],
+        parameters=DATE_RANGE_PARAMETERS + [
+            OpenApiParameter(
+                name="channel",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filtrar por canal (whatsapp, email)",
+                required=False,
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_campaigns": {"type": "integer"},
+                    "campaigns_by_status": {"type": "array"},
+                    "campaigns_by_channel": {"type": "array"},
+                    "total_recipients": {"type": "integer"},
+                    "total_sent": {"type": "integer"},
+                    "total_delivered": {"type": "integer"},
+                    "total_read": {"type": "integer"},
+                    "total_failed": {"type": "integer"},
+                    "overall_delivery_rate": {"type": "number"},
+                    "overall_read_rate": {"type": "number"},
+                    "campaigns_over_time": {"type": "array"},
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
+                },
+            }
+        },
+    )
+    @action(detail=False, methods=["get"])
+    def campaigns(self, request) -> Response:
+        """Get aggregated campaign metrics."""
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        channel = request.query_params.get("channel")
+        start_dt, end_dt = parse_date_range(start_date, end_date)
+
+        # Base queryset
+        campaigns_qs = Campaign.objects.filter(
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        )
+
+        if channel:
+            campaigns_qs = campaigns_qs.filter(channel=channel)
+
+        # Total campaigns
+        total_campaigns = campaigns_qs.count()
+
+        # Campaigns by status
+        campaigns_by_status = list(
+            campaigns_qs.values("status")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+
+        # Campaigns by channel
+        campaigns_by_channel = list(
+            campaigns_qs.values("channel")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+
+        # Recipients metrics
+        recipients_qs = CampaignRecipient.objects.filter(
+            campaign__in=campaigns_qs
+        )
+
+        total_recipients = recipients_qs.count()
+        total_sent = recipients_qs.exclude(status="pending").count()
+        total_delivered = recipients_qs.filter(
+            status__in=["delivered", "read"]
+        ).count()
+        total_read = recipients_qs.filter(status="read").count()
+        total_failed = recipients_qs.filter(status="failed").count()
+
+        # Calculate rates
+        if total_sent > 0:
+            overall_delivery_rate = round(
+                (total_delivered / total_sent) * 100, 2
+            )
+        else:
+            overall_delivery_rate = 0
+
+        if total_delivered > 0:
+            overall_read_rate = round((total_read / total_delivered) * 100, 2)
+        else:
+            overall_read_rate = 0
+
+        # Campaigns over time (by week)
+        campaigns_over_time = list(
+            campaigns_qs.extra(
+                select={"week": "date_trunc('week', created_at)"}
+            )
+            .values("week")
+            .annotate(count=Count("id"))
+            .order_by("week")
+        )
+
+        return Response(
+            {
+                "total_campaigns": total_campaigns,
+                "campaigns_by_status": campaigns_by_status,
+                "campaigns_by_channel": campaigns_by_channel,
+                "total_recipients": total_recipients,
+                "total_sent": total_sent,
+                "total_delivered": total_delivered,
+                "total_read": total_read,
+                "total_failed": total_failed,
+                "overall_delivery_rate": overall_delivery_rate,
+                "overall_read_rate": overall_read_rate,
+                "campaigns_over_time": campaigns_over_time,
+                "start_date": start_dt.strftime("%Y-%m-%d"),
+                "end_date": end_dt.strftime("%Y-%m-%d"),
+            }
+        )
+
+    @extend_schema(
+        summary="Obtener métricas detalladas de una campaña",
+        description=(
+            "Retorna métricas detalladas de una campaña específica incluyendo "
+            "distribución horaria de envíos y desglose por estado."
+        ),
+        tags=["metrics"],
+        parameters=[
+            OpenApiParameter(
+                name="campaign_id",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID de la campaña",
+                required=True,
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "campaign_id": {"type": "integer"},
+                    "campaign_name": {"type": "string"},
+                    "channel": {"type": "string"},
+                    "status": {"type": "string"},
+                    "total_recipients": {"type": "integer"},
+                    "pending": {"type": "integer"},
+                    "sent": {"type": "integer"},
+                    "delivered": {"type": "integer"},
+                    "read": {"type": "integer"},
+                    "failed": {"type": "integer"},
+                    "delivery_rate": {"type": "number"},
+                    "read_rate": {"type": "number"},
+                    "failure_rate": {"type": "number"},
+                    "hourly_distribution": {"type": "array"},
+                },
+            },
+            404: {"description": "Campaña no encontrada"},
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="campaign-detail")
+    def campaign_detail(self, request) -> Response:
+        """Get detailed metrics for a specific campaign."""
+        from django.db.models.functions import TruncHour
+
+        campaign_id = request.query_params.get("campaign_id")
+        if not campaign_id:
+            return Response(
+                {"error": "Se requiere el parámetro campaign_id"},
+                status=400,
+            )
+
+        try:
+            campaign = Campaign.objects.get(id=campaign_id)
+        except Campaign.DoesNotExist:
+            return Response(
+                {"error": "Campaña no encontrada"},
+                status=404,
+            )
+
+        # Status counts
+        status_counts = dict(
+            campaign.recipients.values("status")
+            .annotate(count=Count("id"))
+            .values_list("status", "count")
+        )
+
+        total = campaign.recipients.count()
+        sent = total - status_counts.get("pending", 0)
+        delivered = (
+            status_counts.get("delivered", 0) + status_counts.get("read", 0)
+        )
+        read = status_counts.get("read", 0)
+        failed = status_counts.get("failed", 0)
+
+        # Calculate rates
+        delivery_rate = round((delivered / sent) * 100, 2) if sent > 0 else 0
+        read_rate = (
+            round((read / delivered) * 100, 2) if delivered > 0 else 0
+        )
+        failure_rate = round((failed / total) * 100, 2) if total > 0 else 0
+
+        # Hourly distribution
+        hourly_distribution = list(
+            campaign.recipients.exclude(sent_at__isnull=True)
+            .annotate(hour=TruncHour("sent_at"))
+            .values("hour")
+            .annotate(count=Count("id"))
+            .order_by("hour")
+        )
+
+        return Response(
+            {
+                "campaign_id": campaign.id,
+                "campaign_name": campaign.name,
+                "channel": campaign.channel,
+                "status": campaign.status,
+                "total_recipients": total,
+                "pending": status_counts.get("pending", 0),
+                "sent": sent,
+                "delivered": delivered,
+                "read": read,
+                "failed": failed,
+                "delivery_rate": delivery_rate,
+                "read_rate": read_rate,
+                "failure_rate": failure_rate,
+                "started_at": campaign.started_at,
+                "completed_at": campaign.completed_at,
+                "hourly_distribution": hourly_distribution,
             }
         )
