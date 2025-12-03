@@ -468,7 +468,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
     serializer_class = ActivitySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["lead", "contact", "user", "activity_type"]
+    filterset_fields = ["lead", "contact", "user", "activity_type", "is_read"]
     search_fields = ["description"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
@@ -480,6 +480,15 @@ class ActivityViewSet(viewsets.ModelViewSet):
             serializer.save(user=self.request.user)
         else:
             serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="mark-read")
+    def mark_read(self, request, pk=None):
+        """Mark activity as read."""
+        activity = self.get_object()
+        activity.is_read = True
+        activity.save()
+        serializer = self.get_serializer(activity)
+        return Response(serializer.data)
 
 
 class TaskViewSet(viewsets.ModelViewSet):

@@ -51,6 +51,8 @@ class Activity(models.Model):
     description = models.TextField(_("description"))
     metadata = models.JSONField(_("metadata"), default=dict, blank=True)
     created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    is_read = models.BooleanField(_("is read"), default=False)
+
 
     class Meta:
         verbose_name = _("activity")
