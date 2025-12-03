@@ -12,7 +12,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         """Add command arguments."""
         parser.add_argument(
-            "--version",
+            "--api-version",
             type=str,
             required=True,
             help="WhatsApp Graph API version (e.g., v18.0, v19.0)",
@@ -48,7 +48,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Execute the command."""
-        version = options["version"]
+        version = options["api_version"]
         phone_number_id = options["phone_number_id"]
         access_token = options["access_token"]
         service_name = options["service_name"]

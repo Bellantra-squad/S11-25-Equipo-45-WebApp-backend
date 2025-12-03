@@ -186,20 +186,20 @@ Una vez que el servidor esté corriendo, puedes acceder a:
 ```bash
 # Crear credenciales de WhatsApp
 python manage.py create_whatsapp_credentials \
-    --version v18.0 \
+    --api-version v18.0 \
     --phone-number-id YOUR_PHONE_NUMBER_ID \
     --access-token YOUR_ACCESS_TOKEN
 
 # Actualizar credenciales existentes
 python manage.py create_whatsapp_credentials \
-    --version v19.0 \
+    --api-version v19.0 \
     --phone-number-id YOUR_PHONE_NUMBER_ID \
     --access-token YOUR_ACCESS_TOKEN \
     --update
 
 # Crear y desactivar otras credenciales de WhatsApp
 python manage.py create_whatsapp_credentials \
-    --version v18.0 \
+    --api-version v18.0 \
     --phone-number-id YOUR_PHONE_NUMBER_ID \
     --access-token YOUR_ACCESS_TOKEN \
     --service-name "WhatsApp" \
