@@ -783,9 +783,8 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Enviar email usando plantilla",
         description=(
-            "Envía un email usando una plantilla específica. "
-            "Esta funcionalidad será implementada en el servicio de email. "
-            "Actualmente retorna un error 501 (No implementado)."
+            "Envía un email usando una plantilla específica a un destinatario. "
+            "Utiliza el servicio de emails (SMTP o Brevo) configurado en el sistema."
         ),
         tags=["templates"],
         request={
@@ -806,22 +805,64 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
                         "description": "ID del contacto asociado (opcional)",
                     },
                 },
+                "required": ["to"],
             }
         },
         responses={
             200: {"description": "Email enviado exitosamente"},
-            501: {"description": "Funcionalidad no implementada aún"},
+            400: {"description": "Datos inválidos o faltantes"},
+            500: {"description": "Error al enviar el email"},
             404: {"description": "Plantilla no encontrada"},
         },
     )
     @action(detail=True, methods=["post"])
     def send(self, request, pk=None):
         """Send email using template."""
-        self.get_object()  # Validate template exists
-        # This will be implemented in the email service
+        template = self.get_object()
+
+        to_email = request.data.get("to")
+        lead_id = request.data.get("lead_id")
+        contact_id = request.data.get("contact_id")
+
+        if not to_email:
+            return Response(
+                {"detail": "El campo 'to' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Build basic context with optional lead/contact ids
+        context = {}
+        if lead_id is not None:
+            context["lead_id"] = lead_id
+        if contact_id is not None:
+            context["contact_id"] = contact_id
+
+        # Inicializar servicio de email, priorizando credenciales activas de Brevo
+        credential = ApiCredential.objects.filter(
+            credential_type="email_brevo", is_active=True
+        ).first()
+        email_service = EmailService(api_credential=credential, use_brevo=True)
+        result = email_service.send_template_email(
+            template=template,
+            to=[to_email],
+            context=context,
+        )
+
+        if result.get("success"):
+            return Response(
+                {
+                    "message": "Email enviado exitosamente",
+                    "detail": result,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         return Response(
-            {"message": "Email sending will be implemented in email service"},
-            status=status.HTTP_501_NOT_IMPLEMENTED,
+            {
+                "message": "Error al enviar el email",
+                "error": result.get("error", "Unknown error"),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 

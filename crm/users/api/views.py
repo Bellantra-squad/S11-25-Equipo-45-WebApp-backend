@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.mixins import ListModelMixin
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.mixins import UpdateModelMixin
+from rest_framework.mixins import CreateModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
@@ -39,7 +40,13 @@ from .serializers import UserSerializer
     ),
     create=extend_schema(
         summary="Crear usuario",
-        description="Crea un nuevo usuario en el sistema.",
+        description=(
+            "Crea un nuevo usuario en el sistema. "
+            "Requiere que las contraseñas `password` y "
+            "`password_confirmation` coincidan."
+        ),
+        request=CreateUserSerializer,
+        responses={201: UserSerializer},
         tags=["Usuarios"],
     ),
 )
@@ -47,6 +54,7 @@ class UserViewSet(
     RetrieveModelMixin,
     ListModelMixin,
     UpdateModelMixin,
+    CreateModelMixin,
     GenericViewSet,
 ):
     """

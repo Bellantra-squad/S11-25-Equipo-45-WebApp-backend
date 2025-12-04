@@ -1,3 +1,5 @@
+from drf_spectacular.utils import OpenApiExample
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from crm.users.models import User
@@ -14,40 +16,58 @@ class UserSerializer(serializers.ModelSerializer[User]):
         }
 
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Ejemplo de creación de usuario",
+            summary="Crear un nuevo usuario",
+            description=(
+                "Ejemplo de payload para crear un usuario en el sistema CRM. "
+                "Las contraseñas deben coincidir."
+            ),
+            value={
+                "email": "usuario@ejemplo.com",
+                "first_name": "Juan",
+                "last_name": "Pérez",
+                "role": "sales",
+                "is_active": True,
+                "password": "contraseña_segura_123",
+                "password_confirmation": "contraseña_segura_123",
+            },
+        ),
+    ],
+)
 class CreateUserSerializer(serializers.ModelSerializer[User]):
     """
     Serializer para la creación de nuevos usuarios en el sistema CRM.
 
     Este serializer maneja el registro de usuarios con validación de
     contraseñas y asignación de roles. Todos los campos son obligatorios
-    para garantizar
-    la integridad de los datos del usuario.
-
-    Attributes:
-        email (str): Correo electrónico único del usuario (requerido).
-        first_name (str): Nombre del usuario (requerido).
-        last_name (str): Apellido del usuario (requerido).
-        role (str): Rol asignado al usuario en el sistema (requerido).
-        is_active (bool): Estado de activación de la cuenta (requerido).
-
-    Example:
-        >>> data = {
-        ...     "email": "usuario@ejemplo.com",
-        ...     "first_name": "Juan",
-        ...     "last_name": "Pérez",
-        ...     "role": "sales",
-        ...     "is_active": True,
-        ...     "password": "contraseña_segura",
-        ...     "password_confirmation": "contraseña_segura"
-        ... }
-        >>> serializer = CreateUserSerializer(data=data)
-        >>> serializer.is_valid()
-        >>> user = serializer.save()
+    para garantizar la integridad de los datos del usuario.
     """
+
+    password = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="Contraseña del usuario. No se devuelve en las respuestas.",
+    )
+    password_confirmation = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="Confirmación de la contraseña. Debe coincidir con 'password'.",
+    )
 
     class Meta:
         model = User
-        fields = ["email", "first_name", "last_name", "role", "is_active"]
+        fields = [
+            "email",
+            "first_name",
+            "last_name",
+            "role",
+            "is_active",
+            "password",
+            "password_confirmation",
+        ]
         extra_kwargs = {
             "email": {"required": True},
             "first_name": {"required": True},
@@ -60,35 +80,20 @@ class CreateUserSerializer(serializers.ModelSerializer[User]):
         """
         Crea y retorna una nueva instancia de User con contraseña hasheada.
 
-        Este método sobrescribe el comportamiento por defecto de create() para:
-        1. Crear el usuario con los datos validados
-        2. Extraer y validar las contraseñas
-        3. Hashear la contraseña usando set_password()
-        4. Guardar el usuario con la contraseña segura
-
-        Args:
-            validated_data (dict): Datos validados del serializer que incluyen:
-                - email: Correo electrónico del usuario
-                - first_name: Nombre del usuario
-                - last_name: Apellido del usuario
-                - role: Rol del usuario
-                - is_active: Estado de la cuenta
-                - password: Contraseña en texto plano
-                - password_confirmation: Confirmación de contraseña
-
-        Returns:
-            User: Instancia del usuario creado con contraseña hasheada.
-
-        Raises:
-            serializers.ValidationError: Si las contraseñas no coinciden.
+        Este método:
+        1. Extrae y valida las contraseñas.
+        2. Crea el usuario sin incluir las contraseñas en texto plano.
+        3. Hashea la contraseña usando set_password().
         """
-        user = super().create(validated_data)
         password = validated_data.pop("password")
         password_confirmation = validated_data.pop("password_confirmation")
+
         if password != password_confirmation:
             raise serializers.ValidationError(
                 {"password": "Passwords do not match"},
             )
+
+        user = super().create(validated_data)
         user.set_password(password)
         user.save()
         return user
