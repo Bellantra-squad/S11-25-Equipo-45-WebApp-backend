@@ -723,6 +723,77 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = MessageSerializer(message)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Marcar todos los mensajes de un contacto como leídos",
+        description=(
+            "Marca como leídos todos los mensajes asociados a las conversaciones "
+            "de un contacto específico. Actualiza el campo is_read a True y, cuando "
+            "corresponda, la fecha de lectura."
+        ),
+        tags=["conversations"],
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "contact_id": {
+                        "type": "integer",
+                        "description": "ID del contacto cuyos mensajes se marcarán como leídos",
+                    },
+                },
+                "required": ["contact_id"],
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "updated_count": {
+                        "type": "integer",
+                        "description": "Número de mensajes marcados como leídos",
+                    },
+                },
+            },
+            400: {"description": "Datos inválidos o faltantes"},
+            404: {"description": "Contacto no encontrado"},
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="mark-contact-messages-read")
+    def mark_contact_messages_read(self, request):
+        """
+        Mark all messages for a given contact as read.
+
+        This action finds all conversations for the specified contact and
+        marks their messages as read (is_read=True).
+        """
+        contact_id = request.data.get("contact_id")
+        if not contact_id:
+            return Response(
+                {"detail": "El campo 'contact_id' es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            contact = Contact.objects.get(pk=contact_id)
+        except Contact.DoesNotExist:
+            return Response(
+                {"detail": "Contacto no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get all conversations for this contact
+        conversations = Conversation.objects.filter(contact=contact)
+
+        # Update all related messages to is_read=True
+        updated_count = Message.objects.filter(
+            conversation__in=conversations,
+            is_read=False,
+        ).update(is_read=True)
+
+        return Response(
+            {"updated_count": updated_count},
+            status=status.HTTP_200_OK,
+        )
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     """ViewSet for Message model."""
