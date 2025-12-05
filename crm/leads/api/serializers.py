@@ -261,6 +261,7 @@ class ActivitySerializer(serializers.ModelSerializer[Activity]):
             "description",
             "metadata",
             "created_at",
+            "is_read",
         ]
         read_only_fields = ["id", "created_at"]
 
