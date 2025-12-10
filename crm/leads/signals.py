@@ -1,7 +1,6 @@
 """Signals for broadcasting real-time events."""
 
 import asyncio
-import json
 import logging
 
 from asgiref.sync import async_to_sync
@@ -9,6 +8,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from crm.leads.models import Activity
+from crm.leads.models.text_constants import SIGNAL_LOGS
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,14 @@ def activity_created(sender, instance, created, **kwargs):
                 "user": {
                     "id": instance.user.id,
                     "email": instance.user.email,
-                    "name": instance.user.name if hasattr(instance.user, "name") else instance.user.email,
-                } if instance.user else None,
+                    "name": (
+                        instance.user.name
+                        if hasattr(instance.user, "name")
+                        else instance.user.email
+                    ),
+                }
+                if instance.user
+                else None,
             },
         }
 
@@ -57,8 +63,14 @@ def activity_created(sender, instance, created, **kwargs):
             # No event loop, create one
             async_to_sync(manager.broadcast)("activities", activity_data)
 
-        logger.info(f"Broadcasted new activity {instance.id} to websocket clients")
+        logger.info(
+            SIGNAL_LOGS["activity_broadcasted"].format(
+                activity_id=instance.id
+            )
+        )
 
     except Exception as e:
-        logger.exception(f"Error broadcasting activity: {e}")
+        logger.exception(
+            SIGNAL_LOGS["activity_error"].format(error=e)
+        )
 

@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from crm.leads.models import Activity, Contact, Conversation, Lead, Message
+from crm.leads.models.text_constants import LEAD_ORCHESTRATOR_MESSAGES
 from crm.leads.services.automation_service import AutomationService
 from crm.leads.services.campaign_service import CampaignService
 from crm.leads.services.email_service import EmailService
@@ -42,14 +43,20 @@ class LeadOrchestrator:
             # Parse webhook
             message_data = self.whatsapp_service.parse_webhook_message(webhook_data)
             if not message_data:
-                return {"success": False, "error": "Could not parse webhook message"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["whatsapp_parse_error"],
+                }
 
             sender_phone = message_data.get("from", "")
             content = message_data.get("content", "")
             message_id = message_data.get("message_id", "")
 
             if not sender_phone:
-                return {"success": False, "error": "No sender phone number found"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["whatsapp_no_sender"],
+                }
 
             with transaction.atomic():
                 # Find or create Contact and Lead
@@ -83,7 +90,9 @@ class LeadOrchestrator:
                     lead=lead,
                     contact=contact,
                     activity_type="message",
-                    description=f"Received WhatsApp message: {content[:100]}",
+                    description=LEAD_ORCHESTRATOR_MESSAGES[
+                        "whatsapp_activity_desc"
+                    ].format(content=content[:100]),
                     metadata={
                         "message_id": message_id,
                         "channel": "whatsapp",
@@ -103,11 +112,19 @@ class LeadOrchestrator:
                     channel="whatsapp",
                 )
 
-            logger.info(f"Processed WhatsApp message from {sender_phone}")
+            logger.info(
+                LEAD_ORCHESTRATOR_MESSAGES["whatsapp_processed"].format(
+                    sender=sender_phone
+                )
+            )
             return {"success": True, "contact_id": contact.id, "lead_id": lead.id}
 
         except Exception as e:
-            logger.exception(f"Error processing WhatsApp webhook: {e}")
+            logger.exception(
+                LEAD_ORCHESTRATOR_MESSAGES["whatsapp_process_error"].format(
+                    error=e
+                )
+            )
             return {"success": False, "error": str(e)}
 
     def process_whatsapp_status_webhook(
@@ -121,7 +138,10 @@ class LeadOrchestrator:
         try:
             statuses = self._parse_whatsapp_statuses(webhook_data)
             if not statuses:
-                return {"success": False, "error": "No status updates found"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["whatsapp_status_empty"],
+                }
 
             updated_count = 0
             for status_update in statuses:
@@ -157,11 +177,19 @@ class LeadOrchestrator:
                 )
                 updated_count += 1
 
-            logger.info(f"Processed {updated_count} WhatsApp status updates")
+            logger.info(
+                LEAD_ORCHESTRATOR_MESSAGES["whatsapp_status_processed"].format(
+                    count=updated_count
+                )
+            )
             return {"success": True, "updated_count": updated_count}
 
         except Exception as e:
-            logger.exception(f"Error processing WhatsApp status webhook: {e}")
+            logger.exception(
+                LEAD_ORCHESTRATOR_MESSAGES["whatsapp_status_error"].format(
+                    error=e
+                )
+            )
             return {"success": False, "error": str(e)}
 
     def _parse_whatsapp_statuses(self, webhook_data: Dict) -> list:
@@ -188,7 +216,10 @@ class LeadOrchestrator:
             message_id = webhook_data.get("message-id", "")
 
             if not message_id:
-                return {"success": False, "error": "No message ID found"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["brevo_no_message_id"],
+                }
 
             # Map Brevo events to internal status
             status_map = {
@@ -205,7 +236,12 @@ class LeadOrchestrator:
 
             internal_status = status_map.get(event)
             if not internal_status:
-                return {"success": False, "error": f"Unknown event: {event}"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES[
+                        "brevo_unknown_event"
+                    ].format(event=event),
+                }
 
             # Update CampaignRecipient record
             updated = self.campaign_service.update_recipient_status(
@@ -215,14 +251,21 @@ class LeadOrchestrator:
 
             if updated:
                 logger.info(
-                    f"Updated campaign recipient {message_id} to {internal_status}"
+                    LEAD_ORCHESTRATOR_MESSAGES["brevo_updated"].format(
+                        message_id=message_id, status=internal_status
+                    )
                 )
                 return {"success": True, "status": internal_status}
             else:
-                return {"success": False, "error": "Recipient not found"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["brevo_not_found"],
+                }
 
         except Exception as e:
-            logger.exception(f"Error processing Brevo status webhook: {e}")
+            logger.exception(
+                LEAD_ORCHESTRATOR_MESSAGES["brevo_error"].format(error=e)
+            )
             return {"success": False, "error": str(e)}
 
     def process_email_webhook(self, webhook_data: Dict) -> Dict[str, any]:
@@ -235,14 +278,20 @@ class LeadOrchestrator:
             # Parse webhook
             email_data = self.email_service.parse_webhook(webhook_data)
             if not email_data:
-                return {"success": False, "error": "Could not parse email webhook"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["email_parse_error"],
+                }
 
             sender_email = email_data.get("from_email", "")
             content = email_data.get("body", "")
             subject = email_data.get("subject", "")
 
             if not sender_email:
-                return {"success": False, "error": "No sender email found"}
+                return {
+                    "success": False,
+                    "error": LEAD_ORCHESTRATOR_MESSAGES["email_no_sender"],
+                }
 
             with transaction.atomic():
                 # Find or create Contact and Lead
@@ -283,7 +332,9 @@ class LeadOrchestrator:
                     lead=lead,
                     contact=contact,
                     activity_type="email",
-                    description=f"Received email: {subject}",
+                    description=LEAD_ORCHESTRATOR_MESSAGES[
+                        "email_activity_desc"
+                    ].format(subject=subject),
                     metadata={
                         "message_id": email_data.get("message_id", ""),
                         "channel": "email",
@@ -303,11 +354,19 @@ class LeadOrchestrator:
                     channel="email",
                 )
 
-            logger.info(f"Processed email from {sender_email}")
+            logger.info(
+                LEAD_ORCHESTRATOR_MESSAGES["email_processed"].format(
+                    sender=sender_email
+                )
+            )
             return {"success": True, "contact_id": contact.id, "lead_id": lead.id}
 
         except Exception as e:
-            logger.exception(f"Error processing email webhook: {e}")
+            logger.exception(
+                LEAD_ORCHESTRATOR_MESSAGES["email_process_error"].format(
+                    error=e
+                )
+            )
             return {"success": False, "error": str(e)}
 
     def _get_or_create_contact_and_lead(
@@ -361,7 +420,9 @@ class LeadOrchestrator:
                 first_name = name_parts[0]
                 last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-            first_name = first_name or "Unknown"
+            first_name = first_name or LEAD_ORCHESTRATOR_MESSAGES[
+                "default_first_name"
+            ]
             last_name = last_name or ""
 
             # Create Lead with default status
@@ -372,9 +433,13 @@ class LeadOrchestrator:
             # Generate company name from email or use default
             if email and "@" in email:
                 domain_parts = email.split("@")[1].split(".")
-                company_name = domain_parts[0].title() if domain_parts else "Unknown Company"
+                company_name = (
+                    domain_parts[0].title()
+                    if domain_parts
+                    else LEAD_ORCHESTRATOR_MESSAGES["default_company_name"]
+                )
             else:
-                company_name = "Unknown Company"
+                company_name = LEAD_ORCHESTRATOR_MESSAGES["default_company_name"]
 
             lead = Lead.objects.create(
                 company_name=company_name,
@@ -415,7 +480,10 @@ class LeadOrchestrator:
                 lead=lead,
                 contact=contact,
                 channel=channel,
-                subject=subject or f"{channel.title()} conversation",
+                subject=subject
+                or LEAD_ORCHESTRATOR_MESSAGES["conversation_subject"].format(
+                    channel=channel.title()
+                ),
                 status="open",
             )
 

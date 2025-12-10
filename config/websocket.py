@@ -9,6 +9,7 @@ from django.conf import settings
 from config.ws.auth import authenticate_websocket
 from config.ws.manager import manager
 from config.ws.rate_limiter import RateLimiter
+from crm.leads.models.text_constants import WEBSOCKET_TEXTS
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ async def handle_health_check(scope, receive, send):
             # Gather health metrics
             health_data = {
                 "type": "health_check",
-                "status": "healthy",
+                "status": WEBSOCKET_TEXTS["health_status"],
                 "timestamp": time.time(),
                 "data": {
                     "total_connections": manager.get_total_connections(),
@@ -55,15 +56,17 @@ async def handle_health_check(scope, receive, send):
 
             # Close connection gracefully
             await send({"type": "websocket.close", "code": 1000})
-            logger.info("Health check completed successfully")
+            logger.info(WEBSOCKET_TEXTS["health_success_log"])
 
     except Exception as e:
-        logger.exception(f"Health check error: {e}")
+        logger.exception(
+            WEBSOCKET_TEXTS["health_error_log"].format(error=e)
+        )
         try:
             error_msg = {
                 "type": "health_check",
-                "status": "error",
-                "message": str(e),
+                "status": WEBSOCKET_TEXTS["health_error"],
+                "message": WEBSOCKET_TEXTS["health_error_message"],
             }
             await send({
                 "type": "websocket.send",
@@ -116,7 +119,7 @@ async def websocket_application(scope, receive, send):
     if require_auth and not user:
         # Authentication required but failed
         logger.warning(
-            f"Unauthenticated WebSocket connection attempt to {path}"
+            WEBSOCKET_TEXTS["unauthenticated_log"].format(path=path)
         )
         await send({"type": "websocket.close", "code": 4001})
         return
@@ -143,8 +146,10 @@ async def websocket_application(scope, receive, send):
                 if channel:
                     await manager.connect(channel, connection_info)
                     logger.info(
-                        f"Client connected to channel: {channel} "
-                        f"(user: {user.email if user else 'anonymous'})"
+                        WEBSOCKET_TEXTS["connected_log"].format(
+                            channel=channel,
+                            user=user.email if user else "anónimo",
+                        )
                     )
 
                     # Send welcome message
@@ -152,7 +157,9 @@ async def websocket_application(scope, receive, send):
                         "type": "connection_established",
                         "channel": channel,
                         "message": (
-                            f"Successfully subscribed to {channel} channel"
+                            WEBSOCKET_TEXTS["welcome_message"].format(
+                                channel=channel
+                            )
                         ),
                         "user": {
                             "id": user.id,
@@ -176,7 +183,7 @@ async def websocket_application(scope, receive, send):
                     )
                     error_msg = {
                         "type": "rate_limit_exceeded",
-                        "message": "Too many messages. Please slow down.",
+                        "message": WEBSOCKET_TEXTS["rate_limit"],
                         "retry_after": rate_limiter.window_seconds,
                         "remaining": remaining,
                     }
@@ -224,9 +231,10 @@ async def websocket_application(scope, receive, send):
                             # Unknown action
                             error_msg = {
                                 "type": "error",
-                                "message": (
-                                    f"Unknown action: "
-                                    f"{data.get('action', 'none')}"
+                                "message": WEBSOCKET_TEXTS[
+                                    "unknown_action"
+                                ].format(
+                                    action=data.get("action", "none")
                                 ),
                             }
                             await send({
@@ -237,7 +245,7 @@ async def websocket_application(scope, receive, send):
                 except json.JSONDecodeError:
                     error_msg = {
                         "type": "error",
-                        "message": "Invalid JSON format",
+                        "message": WEBSOCKET_TEXTS["invalid_json"],
                     }
                     await send({
                         "type": "websocket.send",
@@ -245,11 +253,13 @@ async def websocket_application(scope, receive, send):
                     })
                 except Exception as e:
                     logger.exception(
-                        f"Error handling websocket message: {e}"
+                        WEBSOCKET_TEXTS["websocket_error_log"].format(
+                            error=e
+                        )
                     )
                     error_msg = {
                         "type": "error",
-                        "message": "Internal server error",
+                        "message": WEBSOCKET_TEXTS["internal_error"],
                     }
                     await send({
                         "type": "websocket.send",
@@ -257,14 +267,18 @@ async def websocket_application(scope, receive, send):
                     })
 
     except Exception as e:
-        logger.exception(f"WebSocket error: {e}")
+        logger.exception(
+            WEBSOCKET_TEXTS["websocket_error_log"].format(error=e)
+        )
     finally:
         # Always disconnect from the channel
         if connected and channel:
             await manager.disconnect(channel, connection_info)
             logger.info(
-                f"Client disconnected from channel: {channel} "
-                f"(user: {user.email if user else 'anonymous'})"
+                WEBSOCKET_TEXTS["disconnected_log"].format(
+                    channel=channel,
+                    user=user.email if user else "anónimo",
+                )
             )
 
         # Cleanup rate limiter
