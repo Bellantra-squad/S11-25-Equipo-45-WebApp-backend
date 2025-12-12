@@ -48,3 +48,4 @@ SIGNAL_LOGS = {
     "activity_broadcasted": "Actividad {activity_id} enviada a clientes websocket",
     "activity_error": "Error al enviar actividad: {error}",
 }
+

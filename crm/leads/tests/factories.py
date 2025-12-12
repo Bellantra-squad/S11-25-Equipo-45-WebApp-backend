@@ -25,7 +25,8 @@ from crm.leads.models import (
     Task,
 )
 
-fake = FakerLibrary()
+# Configurar Faker con locale español
+fake = FakerLibrary("es_ES")
 
 
 class CategoryFactory(DjangoModelFactory[Category]):
@@ -34,14 +35,14 @@ class CategoryFactory(DjangoModelFactory[Category]):
     name = Faker(
         "word",
         ext_word_list=[
-            "Technology",
-            "Healthcare",
-            "Finance",
-            "Education",
+            "Tecnología",
+            "Salud",
+            "Finanzas",
+            "Educación",
             "Retail",
         ],
     )
-    description = Faker("text", max_nb_chars=200)
+    description = Faker("text", max_nb_chars=200, locale="es_ES")
     color = Faker("hex_color")
 
     class Meta:
@@ -54,9 +55,9 @@ class LeadStatusFactory(DjangoModelFactory[LeadStatus]):
 
     name = Faker(
         "word",
-        ext_word_list=["New", "Contacted", "Qualified", "Won", "Lost"],
+        ext_word_list=["Nuevo", "Contactado", "Calificado", "Ganado", "Perdido"],
     )
-    description = Faker("text", max_nb_chars=200)
+    description = Faker("text", max_nb_chars=200, locale="es_ES")
     color = Faker("hex_color")
     order_position = fuzzy.FuzzyInteger(0, 100)
     is_active = True
@@ -71,9 +72,9 @@ class TagFactory(DjangoModelFactory[Tag]):
 
     name = Faker(
         "word",
-        ext_word_list=["VIP", "Hot", "Cold", "Follow-up", "Prospect"],
+        ext_word_list=["VIP", "Caliente", "Frío", "Seguimiento", "Prospecto"],
     )
-    description = Faker("text", max_nb_chars=200)
+    description = Faker("text", max_nb_chars=200, locale="es_ES")
     color = Faker("hex_color")
 
     class Meta:
@@ -84,14 +85,14 @@ class TagFactory(DjangoModelFactory[Tag]):
 class LeadFactory(DjangoModelFactory[Lead]):
     """Factory for Lead model."""
 
-    company_name = Faker("company")
+    company_name = Faker("company", locale="es_ES")
     industry = Faker(
         "word",
         ext_word_list=[
-            "Technology",
-            "Healthcare",
-            "Finance",
-            "Education",
+            "Tecnología",
+            "Salud",
+            "Finanzas",
+            "Educación",
             "Retail",
         ],
     )
@@ -102,7 +103,14 @@ class LeadFactory(DjangoModelFactory[Lead]):
     is_client = False
     lead_source = Faker(
         "word",
-        ext_word_list=["website", "referral", "cold_call", "social_media"],
+        ext_word_list=[
+            "sitio_web",
+            "referido",
+            "llamada_fría",
+            "redes_sociales",
+            "whatsapp",
+            "email",
+        ],
     )
     lead_score = fuzzy.FuzzyInteger(0, 100)
     estimated_value = LazyAttribute(
@@ -110,7 +118,7 @@ class LeadFactory(DjangoModelFactory[Lead]):
             str(round(random.uniform(1000.00, 100000.00), 2))
         )
     )
-    notes = Faker("text", max_nb_chars=500)
+    notes = Faker("text", max_nb_chars=500, locale="es_ES")
     last_contact_date = Faker(
         "date_time_this_year", tzinfo=timezone.get_current_timezone()
     )
@@ -137,18 +145,19 @@ class ContactFactory(DjangoModelFactory[Contact]):
     """Factory for Contact model."""
 
     lead = SubFactory(LeadFactory)
-    first_name = Faker("first_name")
-    last_name = Faker("last_name")
-    email = Faker("email")
+    first_name = Faker("first_name", locale="es_ES")
+    last_name = Faker("last_name", locale="es_ES")
+    email = Faker("email", locale="es_ES")
     phone = LazyAttribute(lambda obj: f"+{fake.msisdn()}")
     whatsapp_number = LazyAttribute(lambda obj: f"+{fake.msisdn()}")
-    position = Faker("job")
+    position = Faker("job", locale="es_ES")
     department = Faker(
-        "word", ext_word_list=["Sales", "Marketing", "IT", "HR", "Finance"]
+        "word",
+        ext_word_list=["Ventas", "Marketing", "TI", "RRHH", "Finanzas"],
     )
     is_primary = False
     is_decision_maker = fuzzy.FuzzyChoice([True, False])
-    notes = Faker("text", max_nb_chars=300)
+    notes = Faker("text", max_nb_chars=300, locale="es_ES")
 
     class Meta:
         model = Contact
@@ -183,7 +192,7 @@ class ActivityFactory(DjangoModelFactory[Activity]):
             "other",
         ]
     )
-    description = Faker("text", max_nb_chars=500)
+    description = Faker("text", max_nb_chars=500, locale="es_ES")
     metadata = LazyAttribute(
         lambda obj: {
             "source": fake.word(),
@@ -198,8 +207,8 @@ class ActivityFactory(DjangoModelFactory[Activity]):
 class TaskFactory(DjangoModelFactory[Task]):
     """Factory for Task model."""
 
-    title = Faker("sentence", nb_words=4)
-    description = Faker("text", max_nb_chars=500)
+    title = Faker("sentence", nb_words=4, locale="es_ES")
+    description = Faker("text", max_nb_chars=500, locale="es_ES")
     lead = SubFactory(LeadFactory)
     contact = SubFactory(ContactFactory)
     assigned_to = SubFactory("crm.users.tests.factories.UserFactory")
@@ -231,7 +240,7 @@ class ConversationFactory(DjangoModelFactory[Conversation]):
     lead = SubFactory(LeadFactory)
     contact = SubFactory(ContactFactory)
     channel = fuzzy.FuzzyChoice(["whatsapp", "email", "sms", "other"])
-    subject = Faker("sentence", nb_words=5)
+    subject = Faker("sentence", nb_words=5, locale="es_ES")
     status = fuzzy.FuzzyChoice(["open", "closed", "pending", "resolved"])
     assigned_to = SubFactory("crm.users.tests.factories.UserFactory")
 
@@ -247,7 +256,7 @@ class MessageFactory(DjangoModelFactory[Message]):
     sender_id = LazyAttribute(
         lambda obj: str(random.randint(1, 1000))
     )
-    content = Faker("text", max_nb_chars=500)
+    content = Faker("text", max_nb_chars=500, locale="es_ES")
     message_type = fuzzy.FuzzyChoice(
         ["text", "image", "file", "audio", "video"]
     )
@@ -279,10 +288,11 @@ class EmailTemplateFactory(DjangoModelFactory[EmailTemplate]):
     """Factory for EmailTemplate model."""
 
     name = Faker(
-        "word", ext_word_list=["Welcome", "Follow Up", "Reminder", "Custom"]
+        "word",
+        ext_word_list=["Bienvenida", "Seguimiento", "Recordatorio", "Personalizado"],
     )
-    subject = Faker("sentence", nb_words=5)
-    body = Faker("text", max_nb_chars=1000)
+    subject = Faker("sentence", nb_words=5, locale="es_ES")
+    body = Faker("text", max_nb_chars=1000, locale="es_ES")
     template_type = fuzzy.FuzzyChoice(
         ["welcome", "follow_up", "reminder", "custom"]
     )
@@ -298,7 +308,14 @@ class SavedFilterFactory(DjangoModelFactory[SavedFilter]):
 
     user = SubFactory("crm.users.tests.factories.UserFactory")
     name = Faker(
-        "word", ext_word_list=["My Leads", "Hot Prospects", "This Week", "VIP"]
+        "word",
+        ext_word_list=[
+            "Mis Leads",
+            "Prospectos Calientes",
+            "Esta Semana",
+            "VIP",
+            "Contactados",
+        ],
     )
     filter_config = LazyAttribute(
         lambda obj: {
@@ -316,7 +333,7 @@ class SavedFilterFactory(DjangoModelFactory[SavedFilter]):
 class ApiCredentialFactory(DjangoModelFactory[ApiCredential]):
     """Factory for ApiCredential model."""
 
-    service_name = Faker("company")
+    service_name = Faker("company", locale="es_ES")
     credential_type = fuzzy.FuzzyChoice(
         ["whatsapp", "email_smtp", "email_brevo", "other"]
     )
