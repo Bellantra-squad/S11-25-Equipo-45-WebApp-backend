@@ -166,10 +166,6 @@ class Command(BaseCommand):
         self._generate_email_templates(options["email_templates"], users)
         self._generate_saved_filters(options["saved_filters"], users)
 
-        # Generate API credentials
-        self.stdout.write(self.style.SUCCESS("Generating API credentials..."))
-        self._generate_api_credentials(options["api_credentials"])
-
         # Summary
         self.stdout.write(self.style.SUCCESS("\n=== Mock Data Generation Complete ==="))
         self._print_summary()
@@ -410,18 +406,6 @@ class Command(BaseCommand):
             filters.append(filter_obj)
         self.stdout.write(f"  ✓ Generated {count} saved filters")
         return filters
-
-    def _generate_api_credentials(self, count):
-        """Generate API credentials."""
-        credentials = []
-        credential_types = ["whatsapp", "email_smtp", "email_brevo"]
-        for i in range(count):
-            credential = ApiCredentialFactory(
-                credential_type=credential_types[i % len(credential_types)],
-            )
-            credentials.append(credential)
-        self.stdout.write(f"  ✓ Generated {count} API credentials")
-        return credentials
 
     def _print_summary(self):
         """Print summary of generated data."""
